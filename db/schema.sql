@@ -25,9 +25,8 @@ CREATE TYPE patient_outcome AS ENUM ('FULLY_RECOVERED','IMPROVED','NO_CHANGE','W
 CREATE TYPE notification_type AS ENUM ('MEDICATION_REMINDER','APPOINTMENT_REMINDER','TEST_ORDER','FOLLOW_UP','SYSTEM');
 CREATE TYPE notification_status AS ENUM ('PENDING','SENT','READ');
 CREATE TYPE document_type AS ENUM ('NATIONAL_ID_FRONT','NATIONAL_ID_BACK','SELFIE_WITH_ID','MEDICAL_LICENSE',
-                                    'WORKPLACE_DOC', 'LAB_ACCREDITATION','RADIOLOGY_ACCREDITATION',
-                                    'PRESCRIPTION','LAB_RESULT','IMAGING_RESULT','CLINICAL_ATTACHMENT','OTHER');
-
+                                    'WORKPLACE_DOC', 'LAB_ACCREDITATION','RADIOLOGY_ACCREDITATION', 'LOGO',
+                                    'PRESCRIPTION','LAB_RESULT','IMAGING_RESULT','CLINICAL_ATTACHMENT','PROFILE_PICTURE', 'OTHER');
 ------------------------------
 ------ USERS & PROFILES ------
 ------------------------------
@@ -35,6 +34,7 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     email CITEXT NOT NULL UNIQUE,
+    phone_number VARCHAR(20) CHECK (phone_number ~ '^[0-9]{11}$'),
     password_hash VARCHAR(255) NOT NULL,
     role user_role NOT NULL,
     account_status account_status DEFAULT 'PENDING',
@@ -64,8 +64,7 @@ CREATE TABLE patients (
     surname VARCHAR(100),
     gender gender,
     date_of_birth DATE,
-    national_id VARCHAR(50),
-    phone_number VARCHAR(20),
+    national_id VARCHAR(50) CHECK (national_id ~ '^[0-9]{14}$'),
     blood_type blood_type,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -81,24 +80,15 @@ CREATE TABLE healthcare_providers (
     surname VARCHAR(100),
     gender gender,
     date_of_birth DATE,
-    phone_number VARCHAR(20),
-    national_id VARCHAR(50),
+    national_id VARCHAR(50) CHECK (national_id ~ '^[0-9]{14}$'),
     medical_license_number VARCHAR(100),
-    specialization UUID REFERENCES medical_specialties(id),
+    specialization VARCHAR(100),
 
     workplace_name VARCHAR(300),
     workplace_address TEXT,
-    latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE TABLE medical_specialties (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code VARCHAR(50) UNIQUE,
-    name VARCHAR(200) NOT NULL
 );
 
 
@@ -109,11 +99,8 @@ CREATE TABLE laboratories (
     lab_name VARCHAR(300),
     registration_number VARCHAR(100),
     administrator_full_name VARCHAR(300),
-    administrator_phone VARCHAR(20),
 
     lab_address TEXT,
-    latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -126,11 +113,8 @@ CREATE TABLE imaging_centers (
     center_name VARCHAR(300),
     registration_number VARCHAR(100),
     administrator_full_name VARCHAR(300),
-    administrator_phone VARCHAR(20),
 
     center_address TEXT,
-    latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -370,6 +354,7 @@ CREATE TABLE imaging_result_documents (
 CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id),
+
     document_type document_type,
     file_path VARCHAR(500),
     file_name VARCHAR(255),
@@ -424,10 +409,54 @@ CREATE TABLE patient_consents (
 -----------------------------
 ---- Auth & Access Codes ----
 -----------------------------
+CREATE TABLE login_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    ip_address INET,
+    user_agent TEXT,
+      
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE registration_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    email CITEXT NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role user_role NOT NULL,
+
+    registration_data JSONB NOT NULL,
+    registration_documents JSONB NOT NULL,
+
+    ip_address INET,
+    user_agent TEXT,
+
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE password_reset_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    ip_address INET,
+    user_agent TEXT,
+    
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
 
 CREATE TABLE user_otps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    login_session_id UUID REFERENCES login_sessions(id),
+    register_session_id UUID REFERENCES registration_sessions(id),
+    password_reset_session_id UUID REFERENCES password_reset_sessions(id),
 
     otp_hash VARCHAR(255) NOT NULL,
     mfa_method mfa_method NOT NULL,
@@ -436,11 +465,33 @@ CREATE TABLE user_otps (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     used_at TIMESTAMP WITH TIME ZONE,
 
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+
+    CONSTRAINT check_user_otp_context 
+    CHECK (
+        -- Login OTP
+        (user_id IS NOT NULL AND login_session_id IS NOT NULL 
+        AND register_session_id IS NULL AND password_reset_session_id IS NULL) OR
+        -- Registration OTP  
+        (user_id IS NULL AND register_session_id IS NOT NULL 
+        AND login_session_id IS NULL AND password_reset_session_id IS NULL) OR
+        -- Password reset OTP
+        (user_id IS NOT NULL AND password_reset_session_id IS NOT NULL 
+        AND login_session_id IS NULL AND register_session_id IS NULL)
+    )
 );
 
-CREATE INDEX idx_user_otps_user_id ON user_otps(user_id);
-CREATE INDEX idx_user_otps_expires_at ON user_otps(expires_at);
+CREATE UNIQUE INDEX idx_one_active_login_otp 
+ON user_otps(login_session_id) 
+WHERE used_at IS NULL AND login_session_id IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_one_active_register_otp
+ON user_otps(register_session_id)
+WHERE used_at IS NULL AND register_session_id IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_one_active_password_reset_otp
+ON user_otps(password_reset_session_id)
+WHERE used_at IS NULL AND password_reset_session_id IS NOT NULL;
 
 CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -457,8 +508,6 @@ CREATE TABLE refresh_tokens (
     user_agent TEXT
 );
 
-CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
-CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
 CREATE TABLE patient_access_codes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -476,9 +525,6 @@ CREATE TABLE patient_access_codes (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-CREATE INDEX idx_patient_access_codes_patient_id ON patient_access_codes(patient_id);
-CREATE INDEX idx_patient_access_codes_expires_at ON patient_access_codes(expires_at);
-
 CREATE TABLE patient_access_grants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -490,5 +536,3 @@ CREATE TABLE patient_access_grants (
 
     UNIQUE (access_code_id, grantee_user_id)
 );
-
-CREATE INDEX idx_patient_access_grants_grantee ON patient_access_grants(grantee_user_id);
