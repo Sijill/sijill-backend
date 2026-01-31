@@ -10,11 +10,11 @@ CREATE EXTENSION IF NOT EXISTS citext; -- case insensitvity
 CREATE TYPE user_role AS ENUM ('PATIENT','HEALTHCARE_PROVIDER','LAB','IMAGING_CENTER','ADMIN');
 CREATE TYPE account_status AS ENUM ('PENDING','VERIFIED','REJECTED','SUSPENDED','DEACTIVATED');
 CREATE TYPE mfa_method AS ENUM ('NONE', 'EMAIL_OTP', 'SMS_OTP', 'TOTP');
-CREATE TYPE gender AS ENUM ('MALE','FEMALE');
+CREATE TYPE gender AS ENUM ('MALE','FEMALE');--
 CREATE TYPE blood_type AS ENUM ('A+','A-','B+','B-','AB+','AB-','O+','O-','UNKNOWN');
 CREATE TYPE emergency_contact_relationship AS ENUM ('PARENT', 'SPOUSE', 'SIBLING', 'FRIEND', 'CAREGIVER', 'OTHER');
 CREATE TYPE allergy_severity AS ENUM ('MILD','MODERATE','SEVERE','LIFE_THREATENING');
-CREATE TYPE priority AS ENUM ('HIGH', 'MEDIUM', 'LOW');
+CREATE TYPE test_priority AS ENUM ('HIGH', 'MEDIUM', 'LOW');--
 CREATE TYPE access_type AS ENUM ('READ_ONLY','WRITE_ONLY', 'READ_WRITE');
 CREATE TYPE access_status AS ENUM ('ACTIVE','EXPIRED','REVOKED');
 CREATE TYPE order_type AS ENUM ('LABORATORY','IMAGING');
@@ -22,9 +22,9 @@ CREATE TYPE order_status AS ENUM ('PENDING','IN_PROGRESS','COMPLETED','CANCELLED
 CREATE TYPE medication_form AS ENUM ('TABLET','CAPSULE','LIQUID','INJECTION','TOPICAL','INHALER','DROPS','PATCH','OTHER');
 CREATE TYPE diagnosis_status AS ENUM ('ACTIVE','RESOLVED_BY_HCP','RESOLVED_BY_PATIENT');
 CREATE TYPE patient_outcome AS ENUM ('FULLY_RECOVERED','IMPROVED','NO_CHANGE','WORSE');
-CREATE TYPE notification_type AS ENUM ('MEDICATION_REMINDER','APPOINTMENT_REMINDER','TEST_ORDER','FOLLOW_UP','SYSTEM');
+CREATE TYPE notification_type AS ENUM ('MEDICATION_REMINDER','APPOINTMENT_REMINDER','MEDICAL_ORDER', 'FOLLOW_UP','SYSTEM');
 CREATE TYPE notification_status AS ENUM ('PENDING','SENT','READ');
-CREATE TYPE document_type AS ENUM ('NATIONAL_ID_FRONT','NATIONAL_ID_BACK','SELFIE_WITH_ID','MEDICAL_LICENSE',
+CREATE TYPE file_type AS ENUM ('NATIONAL_ID_FRONT','NATIONAL_ID_BACK','SELFIE_WITH_ID','MEDICAL_LICENSE',
                                     'WORKPLACE_DOC', 'LAB_ACCREDITATION','RADIOLOGY_ACCREDITATION', 'LOGO',
                                     'PRESCRIPTION','LAB_RESULT','IMAGING_RESULT','CLINICAL_ATTACHMENT','PROFILE_PICTURE', 'OTHER');
 ------------------------------
@@ -277,7 +277,7 @@ CREATE TABLE lab_orders (
     lab_test_id UUID REFERENCES lab_tests(id),
     specimen_type VARCHAR(100),
     fasting_required BOOLEAN,
-    priority priority,
+    priority test_priority,
     clinical_indication TEXT,
     special_instructions TEXT
 );
@@ -314,7 +314,7 @@ CREATE TABLE imaging_orders (
     imaging_type_id UUID REFERENCES imaging_modalities(id),
     body_part_id UUID REFERENCES body_parts(id),
     contrast_used BOOLEAN,
-    priority priority,
+    priority test_priority,
     clinical_indication TEXT,
     special_instructions TEXT
 );
@@ -355,7 +355,7 @@ CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id),
 
-    document_type document_type,
+    file_type file_type,
     file_path VARCHAR(500),
     file_name VARCHAR(255),
     mime_type VARCHAR(100),
@@ -394,18 +394,6 @@ CREATE TABLE audit_logs (
     metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
-CREATE TABLE patient_consents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id UUID REFERENCES patients(id),
-    consent_type VARCHAR(100),
-    consented BOOLEAN,
-    consent_date TIMESTAMP WITH TIME ZONE,
-    revoked_date TIMESTAMP WITH TIME ZONE,
-    consent_version VARCHAR(50),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
 -----------------------------
 ---- Auth & Access Codes ----
 -----------------------------
@@ -467,7 +455,7 @@ CREATE TABLE user_otps (
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 
-    CONSTRAINT check_user_otp_context 
+    CONSTRAINT check_user_otp_context
     CHECK (
         -- Login OTP
         (user_id IS NOT NULL AND login_session_id IS NOT NULL 

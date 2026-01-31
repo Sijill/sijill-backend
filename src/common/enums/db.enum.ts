@@ -1,0 +1,145 @@
+// Auth Enums
+export enum UserRole {
+    ADMIN = 'ADMIN',
+    PATIENT = 'PATIENT',
+    HEALTHCARE_PROVIDER = 'HEALTHCARE_PROVIDER',
+    LAB = 'LAB',
+    IMAGING_CENTER = 'IMAGING_CENTER',
+}
+
+export enum AccountStatus {
+    PENDING = 'PENDING',
+    VERIFIED = 'VERIFIED',
+    REJECTED = 'REJECTED',
+    SUSPENDED = 'SUSPENDED',
+    DEACTIVATED = 'DEACTIVATED'
+}
+
+export enum MfaMethod {
+    NONE = 'NONE',
+    EMAIL_OTP = 'EMAIL_OTP',
+    SMS_OTP = 'SMS_OTP',
+    TOTP = 'TOTP'
+}
+
+export enum AccessType {
+    READ_ONLY = 'READ_ONLY',
+    WRITE_ONLY = 'WRITE_ONLY',
+    READ_WRITE = 'READ_WRITE'
+}
+
+export enum AccessStatus {
+    ACTIVE = 'ACTIVE',
+    EXPIRED = 'EXPIRED',
+    REVOKED = 'REVOKED'
+}
+
+// User Enums
+export enum Gender {
+    MALE = 'MALE',
+    FEMALE = 'FEMALE'
+}
+
+export enum BloodType {
+    A_POSITIVE = 'A+',
+    A_NEGATIVE = 'A-',
+    B_POSITIVE = 'B+',
+    B_NEGATIVE = 'B-',
+    AB_POSITIVE = 'AB+',
+    AB_NEGATIVE = 'AB-',
+    O_POSITIVE = 'O+',
+    O_NEGATIVE = 'O-',
+    UNKNOWN = 'UNKNOWN'
+}
+
+export enum EmergencyContactRelationship {
+    PARENT = 'PARENT',
+    SPOUSE = 'SPOUSE',
+    SIBLING = 'SIBLING',
+    FRIEND = 'FRIEND',
+    CAREGIVER = 'CAREGIVER',
+    OTHER = 'OTHER'
+}
+
+// Clinical Enums
+export enum DiagnosisStatus {
+    ACTIVE = 'ACTIVE',
+    RESOLVED_BY_HCP = 'RESOLVED_BY_HCP',
+    RESOLVED_BY_PATIENT = 'RESOLVED_BY_PATIENT'
+}
+
+export enum AllergySeverity {
+    MILD = 'MILD',
+    MODERATE = 'MODERATE',
+    SEVERE = 'SEVERE',
+    LIFE_THREATENING = 'LIFE_THREATENING'
+}
+
+export enum MedicationForm {
+    TABLET = 'TABLET',
+    CAPSULE = 'CAPSULE',
+    LIQUID = 'LIQUID',
+    INJECTION = 'INJECTION',
+    TOPICAL = 'TOPICAL',
+    INHALER = 'INHALER',
+    DROPS = 'DROPS',
+    PATCH = 'PATCH',
+    OTHER = 'OTHER'
+}
+
+export enum PatientOutcome {
+    FULLY_RECOVERED = 'FULLY_RECOVERED',
+    IMPROVED = 'IMPROVED',
+    NO_CHANGE = 'NO_CHANGE',
+    WORSE = 'WORSE'
+}
+
+export enum OrderType {
+    LABORATORY = 'LABORATORY',
+    IMAGING = 'IMAGING'
+}
+
+export enum OrderStatus {
+    PENDING = 'PENDING',
+    IN_PROGRESS = 'IN_PROGRESS',
+    COMPLETED = 'COMPLETED',
+    CANCELLED = 'CANCELLED'
+}
+
+export enum TestPriority {
+    HIGH = 'HIGH',
+    MEDIUM = 'MEDIUM',
+    LOW = 'LOW'
+}
+
+// MISC
+export enum NotificationType {
+    MEDICATION_REMINDER = 'MEDICATION_REMINDER',
+    APPOINTMENT_REMINDER = 'APPOINTMENT_REMINDER',
+    MEDICAL_ORDER = 'MEDICAL_ORDER',
+    FOLLOW_UP = 'FOLLOW_UP',
+    SYSTEM = 'SYSTEM'
+}
+
+export enum NotificationStatus {
+    PENDING = 'PENDING',
+    SENT = 'SENT',
+    READ = 'READ'
+}
+
+export enum FileType {
+    PROFILE_PICTURE = 'PROFILE_PICTURE',
+    NATIONAL_ID_FRONT = 'NATIONAL_ID_FRONT',
+    NATIONAL_ID_BACK = 'NATIONAL_ID_BACK',
+    SELFIE_WITH_ID = 'SELFIE_WITH_ID',
+    MEDICAL_LICENSE = 'MEDICAL_LICENSE',
+    WORKPLACE_DOC = 'WORKPLACE_DOC',
+    LAB_ACCREDITATION = 'LAB_ACCREDITATION',
+    RADIOLOGY_ACCREDITATION = 'RADIOLOGY_ACCREDITATION',
+    LOGO = 'LOGO',
+    PRESCRIPTION = 'PRESCRIPTION',
+    LAB_RESULT = 'LAB_RESULT',
+    IMAGING_RESULT = 'IMAGING_RESULT',
+    CLINICAL_ATTACHMENT = 'CLINICAL_ATTACHMENT',
+    OTHER = 'OTHER'
+}
