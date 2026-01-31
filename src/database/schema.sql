@@ -1,20 +1,19 @@
 ------------------------------
 --------- EXTENSIONS ---------
 ------------------------------
-CREATE EXTENSION IF NOT EXISTS citext; -- case insensitvity
+CREATE EXTENSION IF NOT EXISTS citext;
 
-=======================================
 ------------------------------
 ---- CUSTOM TYPES (ENUMS) ----
 ------------------------------
 CREATE TYPE user_role AS ENUM ('PATIENT','HEALTHCARE_PROVIDER','LAB','IMAGING_CENTER','ADMIN');
 CREATE TYPE account_status AS ENUM ('PENDING','VERIFIED','REJECTED','SUSPENDED','DEACTIVATED');
 CREATE TYPE mfa_method AS ENUM ('NONE', 'EMAIL_OTP', 'SMS_OTP', 'TOTP');
-CREATE TYPE gender AS ENUM ('MALE','FEMALE');--
+CREATE TYPE gender AS ENUM ('MALE','FEMALE');
 CREATE TYPE blood_type AS ENUM ('A+','A-','B+','B-','AB+','AB-','O+','O-','UNKNOWN');
 CREATE TYPE emergency_contact_relationship AS ENUM ('PARENT', 'SPOUSE', 'SIBLING', 'FRIEND', 'CAREGIVER', 'OTHER');
 CREATE TYPE allergy_severity AS ENUM ('MILD','MODERATE','SEVERE','LIFE_THREATENING');
-CREATE TYPE test_priority AS ENUM ('HIGH', 'MEDIUM', 'LOW');--
+CREATE TYPE test_priority AS ENUM ('HIGH', 'MEDIUM', 'LOW');
 CREATE TYPE access_type AS ENUM ('READ_ONLY','WRITE_ONLY', 'READ_WRITE');
 CREATE TYPE access_status AS ENUM ('ACTIVE','EXPIRED','REVOKED');
 CREATE TYPE order_type AS ENUM ('LABORATORY','IMAGING');
@@ -34,7 +33,7 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     email CITEXT NOT NULL UNIQUE,
-    phone_number VARCHAR(20) CHECK (phone_number ~ '^[0-9]{11}$'),
+    phone_number VARCHAR(20),
     password_hash VARCHAR(255) NOT NULL,
     role user_role NOT NULL,
     account_status account_status DEFAULT 'PENDING',
@@ -59,12 +58,12 @@ CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id),
 
-    first_name VARCHAR(100),
-    middle_name VARCHAR(100),
-    surname VARCHAR(100),
-    gender gender,
-    date_of_birth DATE,
-    national_id VARCHAR(50) CHECK (national_id ~ '^[0-9]{14}$'),
+    first_name VARCHAR(100) NOT NULL,
+    middle_name VARCHAR(100) NOT NULL,
+    surname VARCHAR(100) NOT NULL,
+    gender gender NOT NULL,
+    date_of_birth DATE NOT NULL,
+    national_id VARCHAR(50) CHECK (national_id ~ '^[0-9]{14}$') NOT NULL,
     blood_type blood_type,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -75,14 +74,14 @@ CREATE TABLE healthcare_providers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id),
 
-    first_name VARCHAR(100),
-    middle_name VARCHAR(100),
-    surname VARCHAR(100),
-    gender gender,
-    date_of_birth DATE,
-    national_id VARCHAR(50) CHECK (national_id ~ '^[0-9]{14}$'),
-    medical_license_number VARCHAR(100),
-    specialization VARCHAR(100),
+    first_name VARCHAR(100) NOT NULL,
+    middle_name VARCHAR(100) NOT NULL,
+    surname VARCHAR(100) NOT NULL,
+    gender gender NOT NULL,
+    date_of_birth DATE NOT NULL,
+    national_id VARCHAR(50) CHECK (national_id ~ '^[0-9]{14}$') NOT NULL,
+    medical_license_number VARCHAR(100) NOT NULL,
+    specialization VARCHAR(100) NOT NULL,
 
     workplace_name VARCHAR(300),
     workplace_address TEXT,
@@ -91,14 +90,13 @@ CREATE TABLE healthcare_providers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-
 CREATE TABLE laboratories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id),
 
-    lab_name VARCHAR(300),
-    registration_number VARCHAR(100),
-    administrator_full_name VARCHAR(300),
+    lab_name VARCHAR(300) NOT NULL,
+    registration_number VARCHAR(100) NOT NULL,
+    administrator_full_name VARCHAR(300) NOT NULL,
 
     lab_address TEXT,
 
@@ -110,9 +108,9 @@ CREATE TABLE imaging_centers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id),
 
-    center_name VARCHAR(300),
-    registration_number VARCHAR(100),
-    administrator_full_name VARCHAR(300),
+    center_name VARCHAR(300) NOT NULL,
+    registration_number VARCHAR(100) NOT NULL,
+    administrator_full_name VARCHAR(300) NOT NULL,
 
     center_address TEXT,
 
@@ -127,10 +125,10 @@ CREATE TABLE patient_emergency_contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID REFERENCES patients(id),
 
-    contact_name VARCHAR(200),
-    phone_number VARCHAR(20),
-    relationship emergency_contact_relationship,
-    is_primary BOOLEAN,
+    contact_name VARCHAR(200) NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    relationship emergency_contact_relationship NOT NULL,
+    is_primary BOOLEAN DEFAULT FALSE,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -254,6 +252,18 @@ CREATE TABLE medications (
 ------------------------------
 ----- ORDERS & RESULTS -------
 ------------------------------
+CREATE TABLE documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+
+    file_type file_type,
+    file_path VARCHAR(500),
+    file_name VARCHAR(255),
+    mime_type VARCHAR(100),
+    file_size_bytes BIGINT,
+    uploaded_at TIMESTAMP WITH TIME ZONE
+);
+
 CREATE TABLE medical_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     encounter_id UUID REFERENCES clinical_encounters(id),
@@ -270,6 +280,12 @@ CREATE TABLE medical_orders (
     updated_at TIMESTAMP WITH TIME ZONE
 );
 
+CREATE TABLE lab_tests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code VARCHAR(50) UNIQUE NOT NULL,   -- e.g., "CBC", "LFT", "CRP"
+    name VARCHAR(200) NOT NULL       -- e.g., "Complete Blood Count", "Liver Function Test"
+);
+
 CREATE TABLE lab_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     medical_order_id UUID NOT NULL UNIQUE REFERENCES medical_orders(id),
@@ -280,12 +296,6 @@ CREATE TABLE lab_orders (
     priority test_priority,
     clinical_indication TEXT,
     special_instructions TEXT
-);
-
-CREATE TABLE lab_tests (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code VARCHAR(50) UNIQUE NOT NULL,   -- e.g., "CBC", "LFT", "CRP"
-    name VARCHAR(200) NOT NULL,         -- e.g., "Complete Blood Count", "Liver Function Test"
 );
 
 CREATE TABLE lab_results (
@@ -307,6 +317,16 @@ CREATE TABLE lab_result_documents (
     document_id UUID REFERENCES documents(id) ON DELETE CASCADE
 );
 
+CREATE TABLE imaging_modalities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) UNIQUE NOT NULL  -- e.g., "X-Ray", "MRI", "CT Scan", "Ultrasound"
+);
+
+CREATE TABLE body_parts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) UNIQUE NOT NULL  -- e.g., "Chest", "Brain", "Abdomen", "Knee"
+);
+
 CREATE TABLE imaging_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     medical_order_id UUID NOT NULL UNIQUE REFERENCES medical_orders(id),
@@ -317,16 +337,6 @@ CREATE TABLE imaging_orders (
     priority test_priority,
     clinical_indication TEXT,
     special_instructions TEXT
-);
-
-CREATE TABLE imaging_modalities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) UNIQUE NOT NULL,  -- e.g., "X-Ray", "MRI", "CT Scan", "Ultrasound"
-);
-
-CREATE TABLE body_parts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) UNIQUE NOT NULL,  -- e.g., "Chest", "Brain", "Abdomen", "Knee"
 );
 
 CREATE TABLE imaging_results (
@@ -351,18 +361,6 @@ CREATE TABLE imaging_result_documents (
 ------------------------------
 ------------ MISC ------------
 ------------------------------
-CREATE TABLE documents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-
-    file_type file_type,
-    file_path VARCHAR(500),
-    file_name VARCHAR(255),
-    mime_type VARCHAR(100),
-    file_size_bytes BIGINT,
-    uploaded_at TIMESTAMP WITH TIME ZONE
-);
-
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id),
