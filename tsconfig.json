@@ -17,7 +17,8 @@
     "paths": {
       "@db/*": ["src/database/*"],
       "@modules/*": ["src/modules/*"],
-      "@common/*": ["src/common/*"]
+      "@common/*": ["src/common/*"],
+      "@uploads": ["uploads"]
     },
     "incremental": true,
     "skipLibCheck": true,
