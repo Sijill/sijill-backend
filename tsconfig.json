@@ -15,8 +15,10 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@db/*": ["src/database/*"],
+      "@db/*": ["src/modules/database/*"],
+      "@email/*": ["src/modules/email/*"],
       "@modules/*": ["src/modules/*"],
+      "@helpers/*": ["src/common/helpers/*"],
       "@common/*": ["src/common/*"],
       "@uploads": ["uploads"]
     },
