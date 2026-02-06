@@ -24,3 +24,16 @@ export interface RegistrationResult {
 	registrationExpiresAt: Date;
 	otpExpiresAt: Date;
 }
+
+export interface ResendOtpData {
+    registrationSessionId: string;
+    otpHash: string;
+    mfaMethod: string;
+    purpose: string;
+    expiresAt: Date;
+}
+
+export interface ResendOtpResult {
+    email: string;
+    otpExpiresAt: Date;
+}

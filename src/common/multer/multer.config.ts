@@ -1,6 +1,7 @@
 import { diskStorage } from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { Request } from 'express';
+import { BadRequestException } from '@nestjs/common';
 import * as path from 'path';
 
 const fieldsMap = new Map();
@@ -90,7 +91,10 @@ export const multerFileFilter = (
 	cb: Function,
 ) => {
 	if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-		return cb(new Error(`Unsupported file type: ${file.mimetype}`), false);
+		return cb(
+			new BadRequestException(`Unsupported file type: ${file.mimetype}`),
+			false,
+		);
 	}
 
 	cb(null, true);

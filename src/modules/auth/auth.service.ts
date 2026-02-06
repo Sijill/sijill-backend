@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException, HttpException } from '@nestjs/common';
 import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
 import { RegistrationBody } from './auth.controller';
 import type { MulterRequest } from './interfaces/multer-request.interface';
@@ -11,7 +11,10 @@ import {
 	RegistrationSessionData,
 	OtpData,
 	RegistrationResult,
+    ResendOtpData,
+    ResendOtpResult
 } from './interfaces/register-repository.interface';
+import { RegisterResendOtpDto } from './dto/resend-otp.dto';
 import * as bcrypt from 'bcrypt';
 import { EmailCategory } from '@common/enums/email.enums';
 
@@ -31,8 +34,8 @@ export class AuthService {
 			const ipAddress: any = req.ip || req.socket.remoteAddress;
 			const userAgent: any = req.headers['user-agent'] || 'unknown';
 
-			const registrationExpiresAt = new Date(Date.now() + 30 * 60 * 1000); //30 minutes
-			const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); //5 minutes
+			const registrationExpiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+			const otpExpiresAt: Date = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
 			const registrationSessionData: RegistrationSessionData = {
 				email: body.email,
@@ -61,7 +64,7 @@ export class AuthService {
 			const emailPayload: EmailPayload = {
 				to: emailAddress,
 				subject: 'Email Verification',
-				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process:`,
+				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process`,
 				html: constructOtpTemplate(timeUntilExpiryReadable(otpExpiresAt), otp),
 				category: EmailCategory.AUTH,
 			};
@@ -74,10 +77,66 @@ export class AuthService {
 			};
 			return response;
 		} catch (error) {
+            if (error instanceof NotFoundException || 
+            error instanceof BadRequestException ||
+            error instanceof HttpException) {
+                throw error;
+            }
+            
 			console.log('Registration Error: ', error);
 			throw new InternalServerErrorException(
 				'Registration failed, please try again.',
 			);
 		}
 	}
+
+    async registerResendOtp(req: Request, body: RegisterResendOtpDto) {
+        try{
+            const otp: string = generateOtp();
+            const otpHash: string = await bcrypt.hash(otp, 10);
+            const otpExpiresAt: Date = new Date(Date.now() + 5 * 60 * 1000);
+
+            const resendOtpData: ResendOtpData = {
+                registrationSessionId: body.registrationSessionId,
+                otpHash: otpHash,
+                mfaMethod: MfaMethod.EMAIL_OTP,
+                purpose: 'Registration OTP',
+                expiresAt: otpExpiresAt
+            }
+
+            const dbResult: ResendOtpResult = await this.authRepository.registerResendOtp(resendOtpData);
+
+            const emailAddress: EmailAddress = {
+                email: dbResult.email
+            }
+
+            const emailPayload: EmailPayload = {
+                to: emailAddress,
+                subject: 'Email Verification',
+				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process`,
+                html: constructOtpTemplate(timeUntilExpiryReadable(dbResult.otpExpiresAt), otp),
+                category: EmailCategory.AUTH
+            }
+
+            await this.emailService.send(emailPayload)
+
+            const response = {
+                registrationSessionId: body.registrationSessionId,
+                otpDelivery: dbResult.email,
+                expiresAt: dbResult.otpExpiresAt.toISOString()
+            }
+
+            return response;
+
+        } catch(error) {
+            if (error instanceof NotFoundException || 
+            error instanceof BadRequestException ||
+            error instanceof HttpException) {
+                throw error;
+            }
+
+            console.log('Resend OTP Error: ', error);
+            throw new InternalServerErrorException('Resend OTP failed, please try again.');
+        }
+    }
 }

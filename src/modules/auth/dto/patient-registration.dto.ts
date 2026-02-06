@@ -1,7 +1,6 @@
 import {
 	IsEmail,
 	IsString,
-	IsDate,
 	IsEnum,
 	Matches,
 	MinLength,
