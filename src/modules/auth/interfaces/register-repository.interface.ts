@@ -26,14 +26,39 @@ export interface RegistrationResult {
 }
 
 export interface ResendOtpData {
-    registrationSessionId: string;
-    otpHash: string;
-    mfaMethod: string;
-    purpose: string;
-    expiresAt: Date;
+	registrationSessionId: string;
+	otpHash: string;
+	mfaMethod: string;
+	purpose: string;
+	expiresAt: Date;
 }
 
 export interface ResendOtpResult {
-    email: string;
-    otpExpiresAt: Date;
+	email: string;
+	otpExpiresAt: Date;
+}
+
+export interface VerifyOtpData {
+	registrationSessionId: string;
+	otp: string;
+}
+
+export interface RegistrationSessionWithOtp {
+	sessionId: string;
+	email: string;
+	passwordHash: string;
+	role: UserRole;
+	registrationData: any;
+	registrationDocuments: any;
+	sessionExpiresAt: Date;
+	otpHash: string;
+	otpExpiresAt: Date;
+	otpUsedAt: Date | null;
+}
+
+export interface VerifyOtpResult {
+	userId: string;
+	email: string;
+	role: UserRole;
+	otpHash: string;
 }

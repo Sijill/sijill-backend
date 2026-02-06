@@ -5,7 +5,7 @@ import {
 	UseFilters,
 	Body,
 	Req,
-    Request,
+	Request,
 } from '@nestjs/common';
 import { RegistrationFileInterceptor } from './interceptors/registration.interceptor';
 import { FileValidationInterceptor } from './interceptors/file-validation.interceptor';
@@ -18,6 +18,7 @@ import { ImagingRegistrationDto } from './dto/imaging-registration.dto';
 import { FileCleanupFilter } from './filters/cleanup.filter';
 import { AuthService } from './auth.service';
 import { RegisterResendOtpDto } from './dto/resend-otp.dto';
+import { RegisterVerifyOtpDto } from './dto/verify-otp.dto';
 
 export type RegistrationBody =
 	| PatientRegistrationDto
@@ -41,14 +42,19 @@ export class AuthController {
 
 	@Post('register/resend-otp')
 	async registerResendOtp(
-        @Req() req: Request,
-        @Body() body: RegisterResendOtpDto
-    ) {
-        return await this.authService.registerResendOtp(req, body);
-    }
+		@Req() req: Request,
+		@Body() body: RegisterResendOtpDto,
+	) {
+		return await this.authService.registerResendOtp(req, body);
+	}
 
 	@Post('register/verify-otp')
-	async registerVerifyOtp() {}
+	async registerVerifyOtp(
+		@Req() req: Request,
+		@Body() body: RegisterVerifyOtpDto,
+	) {
+		return await this.authService.registerVerifyOtp(req, body);
+	}
 
 	@Post('login')
 	async login() {}
