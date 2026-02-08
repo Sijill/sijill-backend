@@ -440,9 +440,9 @@ CREATE TABLE user_otps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    login_session_id UUID REFERENCES login_sessions(id),
-    register_session_id UUID REFERENCES registration_sessions(id),
-    password_reset_session_id UUID REFERENCES password_reset_sessions(id),
+    login_session_id UUID REFERENCES login_sessions(id) ON DELETE CASCADE,
+    register_session_id UUID REFERENCES registration_sessions(id) ON DELETE CASCADE,
+    password_reset_session_id UUID REFERENCES password_reset_sessions(id) ON DELETE CASCADE,
 
     otp_hash VARCHAR(255) NOT NULL,
     mfa_method mfa_method NOT NULL,
@@ -484,7 +484,7 @@ CREATE TABLE refresh_tokens (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
     token_hash VARCHAR(255) NOT NULL UNIQUE,
-    parent_token_id UUID REFERENCES refresh_tokens(id), -- for rotation chains
+    parent_token_id UUID REFERENCES refresh_tokens(id),
 
     issued_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -499,9 +499,9 @@ CREATE TABLE patient_access_codes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    issued_by_user_id UUID NOT NULL REFERENCES users(id), -- should always be the patient user
+    issued_by_user_id UUID NOT NULL REFERENCES users(id),
 
-    code_hash VARCHAR(255) NOT NULL UNIQUE, -- hash the 8-digit code
+    code_hash VARCHAR(255) NOT NULL UNIQUE,
     access_type access_type NOT NULL,
     status access_status NOT NULL DEFAULT 'ACTIVE',
 
@@ -522,3 +522,7 @@ CREATE TABLE patient_access_grants (
 
     UNIQUE (access_code_id, grantee_user_id)
 );
+
+CREATE UNIQUE INDEX uniq_pending_registration_email
+ON registration_sessions (email)
+WHERE expires_at > now();

@@ -6,12 +6,12 @@ import {
 	HttpException,
 } from '@nestjs/common';
 import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
-import { RegistrationBody } from './auth.controller';
-import type { MulterRequest } from './interfaces/multer-request.interface';
+import { RegistrationBody } from '../auth.controller';
+import type { MulterRequest } from '../interfaces/multer-request.interface';
 import { MfaMethod } from '@common/enums/db.enum';
 import { generateOtp } from '@helpers/crypto.helper';
-import { constructOtpTemplate } from '@email/templates/otp.template';
-import { AuthRepository } from './repository/auth.repository';
+import { constructOtpRegistrationTemplate } from '@email/templates/registration-otp.template';
+import { RegisterRepository } from '../repository/register.repository';
 import { timeUntilExpiryReadable } from '@helpers/time.helper';
 import {
 	RegistrationSessionData,
@@ -20,23 +20,42 @@ import {
 	ResendOtpData,
 	ResendOtpResult,
 	RegistrationSessionWithOtp,
-} from './interfaces/register-repository.interface';
-import { RegisterResendOtpDto } from './dto/resend-otp.dto';
-import { RegisterVerifyOtpDto } from './dto/verify-otp.dto';
+} from '../interfaces/register-repository.interface';
+import {
+	RegisterVerifyOtpDto,
+	RegisterResendOtpDto,
+} from '../dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { EmailCategory } from '@common/enums/email.enums';
 import { constructPendingTemplate } from '@email/templates/pending.template';
-import { InvalidOtpException } from './exceptions/auth.exceptions';
+import {
+	InvalidOtpException,
+	EmailAlreadyInUseException,
+	PendingRegistrationExistsException,
+} from '../exceptions/auth.exceptions';
 
 @Injectable()
-export class AuthService {
+export class RegisterService {
 	constructor(
 		private readonly emailService: EmailService,
-		private readonly authRepository: AuthRepository,
+		private readonly registerRepository: RegisterRepository,
 	) {}
 
 	async register(req: MulterRequest, body: RegistrationBody) {
 		try {
+			const existingUser = await this.registerRepository.findByEmail(
+				body.email,
+			);
+			if (existingUser?.rowCount) {
+				const user = existingUser.rows[0];
+
+				if (user.account_status !== 'PENDING') {
+					throw new EmailAlreadyInUseException();
+				}
+
+				throw new PendingRegistrationExistsException();
+			}
+
 			const otp: string = generateOtp();
 			const otpHash: string = await bcrypt.hash(otp, 10);
 			const passwordHash: string = await bcrypt.hash(body.password, 12);
@@ -63,10 +82,11 @@ export class AuthService {
 				purpose: 'Registration OTP',
 				expiresAt: otpExpiresAt,
 			};
-			const dbResult: RegistrationResult = await this.authRepository.register(
-				registrationSessionData,
-				otpData,
-			);
+			const dbResult: RegistrationResult =
+				await this.registerRepository.register(
+					registrationSessionData,
+					otpData,
+				);
 
 			const emailAddress: EmailAddress = {
 				email: body.email,
@@ -75,7 +95,10 @@ export class AuthService {
 				to: emailAddress,
 				subject: 'Email Verification',
 				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process`,
-				html: constructOtpTemplate(timeUntilExpiryReadable(otpExpiresAt), otp),
+				html: constructOtpRegistrationTemplate(
+					timeUntilExpiryReadable(otpExpiresAt),
+					otp,
+				),
 				category: EmailCategory.AUTH,
 			};
 			await this.emailService.send(emailPayload);
@@ -117,7 +140,7 @@ export class AuthService {
 			};
 
 			const dbResult: ResendOtpResult =
-				await this.authRepository.registerResendOtp(resendOtpData);
+				await this.registerRepository.registerResendOtp(resendOtpData);
 
 			const emailAddress: EmailAddress = {
 				email: dbResult.email,
@@ -127,7 +150,7 @@ export class AuthService {
 				to: emailAddress,
 				subject: 'Email Verification',
 				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process`,
-				html: constructOtpTemplate(
+				html: constructOtpRegistrationTemplate(
 					timeUntilExpiryReadable(dbResult.otpExpiresAt),
 					otp,
 				),
@@ -162,7 +185,7 @@ export class AuthService {
 	async registerVerifyOtp(req: Request, body: RegisterVerifyOtpDto) {
 		try {
 			const sessionData: RegistrationSessionWithOtp =
-				await this.authRepository.getRegistrationSessionForVerification(
+				await this.registerRepository.getRegistrationSessionForVerification(
 					body.registrationSessionId,
 				);
 
@@ -172,7 +195,7 @@ export class AuthService {
 			}
 
 			const { userId } =
-				await this.authRepository.completeRegistration(sessionData);
+				await this.registerRepository.completeRegistration(sessionData);
 
 			const emailAddress: EmailAddress = {
 				email: sessionData.email,

@@ -20,8 +20,15 @@ import {
 import { FileType, AccountStatus, MfaMethod } from '@common/enums/db.enum';
 
 @Injectable()
-export class AuthRepository {
+export class RegisterRepository {
 	constructor(private readonly databaseService: DatabaseService) {}
+
+	async findByEmail(email: string) {
+		return this.databaseService.query(
+			`SELECT id, account_status FROM users WHERE email = $1`,
+			[email],
+		);
+	}
 
 	async register(
 		registrationData: RegistrationSessionData,
@@ -362,7 +369,9 @@ export class AuthRepository {
 			return { userId };
 		} catch (error) {
 			await client.query('ROLLBACK');
-
+			if (error.code === '23505') {
+				throw new OtpAlreadyUsedException();
+			}
 			if (error instanceof OtpAlreadyUsedException) {
 				throw error;
 			}

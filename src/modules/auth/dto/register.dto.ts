@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, Matches, Length } from 'class-validator';
+import { IsString, IsNotEmpty, IsUUID, Matches, Length } from 'class-validator';
 
 export class RegisterVerifyOtpDto {
 	@IsString()
@@ -12,4 +12,10 @@ export class RegisterVerifyOtpDto {
 	})
 	@IsNotEmpty()
 	otp: string;
+}
+
+export class RegisterResendOtpDto {
+	@IsUUID()
+	@IsString()
+	registrationSessionId: string;
 }

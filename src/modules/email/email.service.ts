@@ -21,14 +21,15 @@ export class EmailService {
 			throw new Error('Email payload must include text or html');
 		}
 
-		const env = process.env.NODE_ENV;
-		if (env === 'development') {
-			await this.sendViaMailtrapSandbox(payload);
-		} else if (env === 'production') {
-			await this.sendViaMailtrap(payload);
-		} else {
-			throw new Error('Unsupported NODE_ENV: ${env}');
-		}
+		await this.sendViaMailtrap(payload);
+		// const env = process.env.NODE_ENV;
+		// if (env === 'development') {
+		// 	await this.sendViaMailtrapSandbox(payload);
+		// } else if (env === 'production') {
+		// 	await this.sendViaMailtrap(payload);
+		// } else {
+		// 	throw new Error('Unsupported NODE_ENV: ${env}');
+		// }
 	}
 
 	private async sendViaMailtrapSandbox(payload: EmailPayload): Promise<void> {
@@ -83,5 +84,49 @@ export class EmailService {
 		}
 	}
 
-	private async sendViaMailtrap(payload: EmailPayload): Promise<void> {}
+	private async sendViaMailtrap(payload: EmailPayload): Promise<void> {
+		const token = process.env.MAILTRAP_SEND_TOKEN;
+		const fromEmail = process.env.MAILTRAP_FROM_EMAIL;
+		const fromName = process.env.MAILTRAP_FROM_NAME;
+
+		if (!token) {
+			throw new Error('MAILTRAP_SEND_TOKEN is not set');
+		}
+
+		if (!payload.from?.email && !fromEmail) {
+			throw new Error(
+				'MAILTRAP_FROM_EMAIL is not set and no from.email provided',
+			);
+		}
+
+		const from: EmailAddress = payload.from?.email
+			? payload.from
+			: {
+					email: fromEmail as string,
+					name: fromName,
+				};
+
+		const to = Array.isArray(payload.to) ? payload.to : [payload.to];
+
+		const response = await fetch('https://send.api.mailtrap.io/api/send', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${token}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				from,
+				to,
+				subject: payload.subject,
+				text: payload.text,
+				html: payload.html,
+				category: payload.category,
+			}),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`Mailtrap send failed: ${response.status} ${errorText}`);
+		}
+	}
 }

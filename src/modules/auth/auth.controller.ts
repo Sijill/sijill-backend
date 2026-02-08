@@ -5,6 +5,7 @@ import {
 	UseFilters,
 	Body,
 	Req,
+	Res,
 	Request,
 } from '@nestjs/common';
 import { RegistrationFileInterceptor } from './interceptors/registration.interceptor';
@@ -16,9 +17,26 @@ import { HcpRegistrationDto } from './dto/hcp-registration.dto';
 import { LabRegistrationDto } from './dto/lab-registration.dto';
 import { ImagingRegistrationDto } from './dto/imaging-registration.dto';
 import { FileCleanupFilter } from './filters/cleanup.filter';
-import { AuthService } from './auth.service';
-import { RegisterResendOtpDto } from './dto/resend-otp.dto';
-import { RegisterVerifyOtpDto } from './dto/verify-otp.dto';
+import { RegisterVerifyOtpDto, RegisterResendOtpDto } from './dto/register.dto';
+import {
+	LoginDto,
+	LoginResendOtpDto,
+	LoginVerifyOtpDto,
+	RefreshTokenDto,
+	LogoutDto,
+} from './dto/login.dto';
+import { RegisterService } from './services/register.service';
+import { LoginService } from './services/login.service';
+import { PasswordResetService } from './services/reset-password.service';
+import type {
+	Request as ExpressRequest,
+	Response as ExpressResponse,
+} from 'express';
+import {
+	PasswordResetConfirmDto,
+	PasswordResetInitiateDto,
+	PasswordResetResendOtpDto,
+} from './dto/reset-password.dto';
 
 export type RegistrationBody =
 	| PatientRegistrationDto
@@ -28,7 +46,11 @@ export type RegistrationBody =
 
 @Controller('api/v1/auth')
 export class AuthController {
-	constructor(private readonly authService: AuthService) {}
+	constructor(
+		private readonly registerService: RegisterService,
+		private readonly loginService: LoginService,
+		private readonly passwordResetService: PasswordResetService,
+	) {}
 
 	@Post('register')
 	@UseInterceptors(RegistrationFileInterceptor, FileValidationInterceptor)
@@ -37,7 +59,7 @@ export class AuthController {
 		@Req() req: MulterRequest,
 		@Body(RegistrationBodyPipe) body: RegistrationBody,
 	) {
-		return await this.authService.register(req, body);
+		return await this.registerService.register(req, body);
 	}
 
 	@Post('register/resend-otp')
@@ -45,7 +67,7 @@ export class AuthController {
 		@Req() req: Request,
 		@Body() body: RegisterResendOtpDto,
 	) {
-		return await this.authService.registerResendOtp(req, body);
+		return await this.registerService.registerResendOtp(req, body);
 	}
 
 	@Post('register/verify-otp')
@@ -53,27 +75,67 @@ export class AuthController {
 		@Req() req: Request,
 		@Body() body: RegisterVerifyOtpDto,
 	) {
-		return await this.authService.registerVerifyOtp(req, body);
+		return await this.registerService.registerVerifyOtp(req, body);
 	}
 
 	@Post('login')
-	async login() {}
+	async login(@Req() req: Request, @Body() body: LoginDto) {
+		return await this.loginService.login(req, body);
+	}
 
 	@Post('login/resend-otp')
-	async loginResendOtp() {}
+	async loginResendOtp(@Req() req: Request, @Body() body: LoginResendOtpDto) {
+		return await this.loginService.loginResendOtp(req, body);
+	}
 
 	@Post('login/verify-otp')
-	async loginVerifyOtp() {}
-
-	@Post('password-reset/initiate')
-	async passwordResetInitiate() {}
-
-	@Post('password-reset/resend-otp')
-	async passwordResetResendOtp() {}
-
-	@Post('password-reset/confirm')
-	async passwordResetConfirm() {}
+	async loginVerifyOtp(
+		@Req() req: ExpressRequest,
+		@Res({ passthrough: true }) res: ExpressResponse,
+		@Body() body: LoginVerifyOtpDto,
+	) {
+		return await this.loginService.loginVerifyOtp(req, res, body);
+	}
 
 	@Post('refresh')
-	async refreshAccessToken() {}
+	async refresh(
+		@Req() req: ExpressRequest,
+		@Res({ passthrough: true }) res: ExpressResponse,
+		@Body() body: RefreshTokenDto,
+	) {
+		return await this.loginService.refresh(req, res, body);
+	}
+
+	@Post('logout')
+	async logout(
+		@Req() req: ExpressRequest,
+		@Res({ passthrough: true }) res: ExpressResponse,
+		@Body() body: LogoutDto,
+	) {
+		return await this.loginService.logout(req, res, body);
+	}
+
+	@Post('password-reset')
+	async passwordResetInitiate(
+		@Req() req: Request,
+		@Body() body: PasswordResetInitiateDto,
+	) {
+		return await this.passwordResetService.passwordResetInitiate(req, body);
+	}
+
+	@Post('password-reset/resend-otp')
+	async passwordResetResendOtp(
+		@Req() req: Request,
+		@Body() body: PasswordResetResendOtpDto,
+	) {
+		return await this.passwordResetService.passwordResetResendOtp(req, body);
+	}
+
+	@Post('password-reset/confirm')
+	async passwordResetConfirm(
+		@Req() req: Request,
+		@Body() body: PasswordResetConfirmDto,
+	) {
+		return await this.passwordResetService.passwordResetConfirm(req, body);
+	}
 }

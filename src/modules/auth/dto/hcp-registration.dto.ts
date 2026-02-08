@@ -22,7 +22,7 @@ export class HcpRegistrationDto {
 	@IsNotEmpty()
 	phoneNumber: string;
 
-	@MinLength(8)
+	@MinLength(8, { message: 'Password must be at least 8 characters long' })
 	@IsString()
 	@IsNotEmpty()
 	password: string;
