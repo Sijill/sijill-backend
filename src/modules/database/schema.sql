@@ -422,6 +422,8 @@ CREATE TABLE registration_sessions (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+CREATE UNIQUE INDEX uniq_pending_registration_email
+    ON registration_sessions (email);
 
 CREATE TABLE password_reset_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -522,7 +524,3 @@ CREATE TABLE patient_access_grants (
 
     UNIQUE (access_code_id, grantee_user_id)
 );
-
-CREATE UNIQUE INDEX uniq_pending_registration_email
-ON registration_sessions (email)
-WHERE expires_at > now();
