@@ -8,7 +8,11 @@ import { EmailModule } from '@email/email.module';
 	imports: [
 		ConfigModule.forRoot({
 			isGlobal: true,
-			envFilePath: `${process.cwd()}/.env.${process.env.NODE_ENV || 'development'}`,
+			envFilePath:
+				process.env.NODE_ENV === 'production'
+					? '.env.production'
+					: '.env.development',
+			ignoreEnvFile: process.env.DOCKER_ENV === 'false',
 		}),
 		DatabaseModule,
 		EmailModule,

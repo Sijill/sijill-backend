@@ -1,14 +1,73 @@
+version: '3.8'
+
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sijill-postgres
+    environment:
+      POSTGRES_USER: sijill
+      POSTGRES_PASSWORD: sijill
+      POSTGRES_DB: sijill
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/modules/database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - sijill-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sijill"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: mailpit
+    container_name: sijill-mailpit
     ports:
       - "8025:8025"
       - "1025:1025"
     networks:
-      - app-network
+      - sijill-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sijill-api
+    ports:
+      - "8000:8000"
+    environment:
+      NODE_ENV: development
+      PORT: 8000
+      
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: sijill
+      DB_USER: sijill
+      DB_PASSWORD: sijill
+      
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM_EMAIL: sijill@email.gov
+      SMTP_FROM_NAME: Sijill
+      
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    networks:
+      - sijill-network
+    restart: unless-stopped
 
 networks:
-  app-network:
+  sijill-network:
     driver: bridge
+
+volumes:
+  postgres_data:
