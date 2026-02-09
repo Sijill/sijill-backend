@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import * as nodemailer from 'nodemailer';
+import { Transporter } from 'nodemailer';
 
 export type EmailAddress = {
 	email: string;
@@ -16,38 +18,30 @@ export type EmailPayload = {
 
 @Injectable()
 export class EmailService {
+	private transporter: Transporter;
+
+	constructor() {
+		this.transporter = nodemailer.createTransport({
+			host: process.env.SMTP_HOST || 'mailpit',
+			port: parseInt(process.env.SMTP_PORT || '1025'),
+			secure: false,
+		});
+	}
+
 	async send(payload: EmailPayload): Promise<void> {
 		if (!payload.text && !payload.html) {
 			throw new Error('Email payload must include text or html');
 		}
 
-		await this.sendViaMailtrap(payload);
-		// const env = process.env.NODE_ENV;
-		// if (env === 'development') {
-		// 	await this.sendViaMailtrapSandbox(payload);
-		// } else if (env === 'production') {
-		// 	await this.sendViaMailtrap(payload);
-		// } else {
-		// 	throw new Error('Unsupported NODE_ENV: ${env}');
-		// }
+		await this.sendViaSMTP(payload);
 	}
 
-	private async sendViaMailtrapSandbox(payload: EmailPayload): Promise<void> {
-		const token = process.env.MAILTRAP_TOKEN;
-		const inboxId = process.env.MAILTRAP_INBOX_ID;
-		const fromEmail = process.env.MAILTRAP_FROM_EMAIL;
-		const fromName = process.env.MAILTRAP_FROM_NAME;
+	private async sendViaSMTP(payload: EmailPayload): Promise<void> {
+		const fromEmail = process.env.SMTP_FROM_EMAIL;
+		const fromName = process.env.SMTP_FROM_NAME;
 
-		if (!token) {
-			throw new Error('MAILTRAP_TOKEN is not set');
-		}
-		if (!inboxId) {
-			throw new Error('MAILTRAP_INBOX_ID is not set');
-		}
 		if (!payload.from?.email && !fromEmail) {
-			throw new Error(
-				'MAILTRAP_FROM_EMAIL is not set and no from.email provided',
-			);
+			throw new Error('SMTP_FROM_EMAIL is not set and no from.email provided');
 		}
 
 		const from: EmailAddress = payload.from?.email
@@ -57,76 +51,27 @@ export class EmailService {
 					name: fromName,
 				};
 
-		const to = Array.isArray(payload.to) ? payload.to : [payload.to];
+		const formatAddress = (addr: EmailAddress) => {
+			return addr.name ? `"${addr.name}" <${addr.email}>` : addr.email;
+		};
 
-		const response = await fetch(
-			`https://sandbox.api.mailtrap.io/api/send/${inboxId}`,
-			{
-				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${token}`,
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					from,
-					to,
-					subject: payload.subject,
-					text: payload.text,
-					html: payload.html,
-					category: payload.category,
-				}),
-			},
-		);
+		const to = Array.isArray(payload.to)
+			? payload.to.map(formatAddress)
+			: formatAddress(payload.to);
 
-		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`Mailtrap send failed: ${response.status} ${errorText}`);
-		}
-	}
-
-	private async sendViaMailtrap(payload: EmailPayload): Promise<void> {
-		const token = process.env.MAILTRAP_SEND_TOKEN;
-		const fromEmail = process.env.MAILTRAP_FROM_EMAIL;
-		const fromName = process.env.MAILTRAP_FROM_NAME;
-
-		if (!token) {
-			throw new Error('MAILTRAP_SEND_TOKEN is not set');
-		}
-
-		if (!payload.from?.email && !fromEmail) {
-			throw new Error(
-				'MAILTRAP_FROM_EMAIL is not set and no from.email provided',
-			);
-		}
-
-		const from: EmailAddress = payload.from?.email
-			? payload.from
-			: {
-					email: fromEmail as string,
-					name: fromName,
-				};
-
-		const to = Array.isArray(payload.to) ? payload.to : [payload.to];
-
-		const response = await fetch('https://send.api.mailtrap.io/api/send', {
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${token}`,
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				from,
+		try {
+			await this.transporter.sendMail({
+				from: formatAddress(from),
 				to,
 				subject: payload.subject,
 				text: payload.text,
 				html: payload.html,
-				category: payload.category,
-			}),
-		});
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`Mailtrap send failed: ${response.status} ${errorText}`);
+				headers: payload.category
+					? { 'X-Category': payload.category }
+					: undefined,
+			});
+		} catch (error) {
+			throw new Error(`SMTP send failed: ${error.message}`);
 		}
 	}
 }
