@@ -12,10 +12,13 @@ import { LoginService } from './services/login.service';
 import { LoginRepository } from './repository/login.repository';
 import { PasswordResetService } from './services/reset-password.service';
 import { PasswordResetRepository } from './repository/reset-password.repository';
+import { AuthGuard } from './guards/auth.guard';
+import { RoleGuard } from './guards/role.guard';
+import { StatusGuard } from './guards/status.guard';
 
 @Module({
 	imports: [],
-	exports: [],
+	exports: [AuthGuard, RoleGuard, StatusGuard],
 	controllers: [AuthController],
 	providers: [
 		RegisterService,
@@ -24,6 +27,9 @@ import { PasswordResetRepository } from './repository/reset-password.repository'
 		LoginRepository,
 		PasswordResetService,
 		PasswordResetRepository,
+		AuthGuard,
+		RoleGuard,
+		StatusGuard,
 	],
 })
 export class AuthModule implements NestModule {
