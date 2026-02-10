@@ -5,14 +5,7 @@ import {
 	BadRequestException,
 	HttpException,
 } from '@nestjs/common';
-import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
-import { RegistrationBody } from '../auth.controller';
-import type { MulterRequest } from '../interfaces/multer-request.interface';
-import { MfaMethod } from '@common/enums/db.enum';
-import { generateOtp } from '@helpers/crypto.helper';
-import { constructOtpRegistrationTemplate } from '@email/templates/registration-otp.template';
-import { RegisterRepository } from '../repository/register.repository';
-import { timeUntilExpiryReadable } from '@helpers/time.helper';
+
 import {
 	RegistrationSessionData,
 	OtpData,
@@ -21,25 +14,40 @@ import {
 	ResendOtpResult,
 	RegistrationSessionWithOtp,
 } from '../interfaces/register-repository.interface';
-import {
-	RegisterVerifyOtpDto,
-	RegisterResendOtpDto,
-} from '../dto/register.dto';
-import * as bcrypt from 'bcrypt';
-import { EmailCategory } from '@common/enums/email.enums';
-import { constructPendingTemplate } from '@email/templates/pending.template';
+
 import {
 	InvalidOtpException,
 	EmailAlreadyInUseException,
 	PendingRegistrationExistsException,
 } from '../exceptions/auth.exceptions';
 
+import {
+	RegisterVerifyOtpDto,
+	RegisterResendOtpDto,
+} from '../dto/register.dto';
+
+import { constructOtpRegistrationTemplate } from '@email/templates/registration-otp.template';
+import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
+import { constructPendingTemplate } from '@email/templates/pending.template';
+import type { MulterRequest } from '../interfaces/multer-request.interface';
+import { RegisterRepository } from '../repository/register.repository';
+import { RegistrationBody } from '../auth.controller';
+import { MfaMethod } from '@common/enums/db.enum';
+import { generateOtp } from '@helpers/crypto.helper';
+import { timeUntilExpiryReadable } from '@helpers/time.helper';
+import { EmailCategory } from '@common/enums/email.enums';
+import { PinoLogger } from 'nestjs-pino';
+import * as bcrypt from 'bcrypt';
+
 @Injectable()
 export class RegisterService {
 	constructor(
 		private readonly emailService: EmailService,
 		private readonly registerRepository: RegisterRepository,
-	) {}
+		private readonly logger: PinoLogger,
+	) {
+		this.logger.setContext(RegisterService.name);
+	}
 
 	async register(req: MulterRequest, body: RegistrationBody) {
 		try {

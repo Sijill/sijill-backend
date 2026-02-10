@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from '@db/database.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { EmailModule } from '@email/email.module';
+import { LoggerModule } from 'nestjs-pino';
 
 @Module({
 	imports: [
@@ -14,6 +15,26 @@ import { EmailModule } from '@email/email.module';
 					: '.env.development',
 			ignoreEnvFile: process.env.DOCKER_ENV === 'false',
 		}),
+
+		LoggerModule.forRoot({
+			pinoHttp: {
+				autoLogging: false,
+				level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+
+				transport:
+					process.env.NODE_ENV !== 'production'
+						? {
+								target: 'pino-pretty',
+								options: {
+									colorize: true,
+									singleLine: false,
+									translateTime: 'yyyy-mm-dd HH:MM:ss',
+								},
+							}
+						: undefined,
+			},
+		}),
+
 		DatabaseModule,
 		EmailModule,
 		AuthModule,
