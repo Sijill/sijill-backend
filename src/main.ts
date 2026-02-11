@@ -34,5 +34,5 @@ import * as path from 'path';
 	app.use(cookieParser());
 
 	await app.listen(process.env.PORT ?? 8000);
-	console.log(`Application is running on PORT ${process.env.PORT ?? 8000}`);
+	console.log(`Server started on PORT: ${process.env.PORT ?? 8000}`);
 })();

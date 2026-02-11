@@ -128,7 +128,7 @@ export class RegisterService {
 
 			this.logger.error('Registration Error: ', error);
 			throw new InternalServerErrorException(
-				'Registration failed, please try again.'
+				'Registration failed, please try again.',
 			);
 		}
 	}

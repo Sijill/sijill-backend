@@ -6,7 +6,6 @@ import {
 
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 
-
 export const RegistrationFileInterceptor = FileFieldsInterceptor(
 	[
 		{ name: 'nationalIdFront', maxCount: 1 },

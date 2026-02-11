@@ -99,6 +99,8 @@ export class EmailAlreadyInUseException extends ConflictException {
 
 export class PendingRegistrationExistsException extends ConflictException {
 	constructor() {
-		super('A registration with this email already exists and is pending verification');
+		super(
+			'A registration with this email already exists and is pending verification',
+		);
 	}
 }

@@ -50,6 +50,7 @@ export type RegistrationBody =
 	| ImagingRegistrationDto;
 
 @Controller('api/v1/auth')
+@Throttle({ default: { limit: 5, ttl: 60000 } })
 export class AuthController {
 	constructor(
 		private readonly registerService: RegisterService,
@@ -57,7 +58,6 @@ export class AuthController {
 		private readonly passwordResetService: PasswordResetService,
 	) {}
 
-	@Throttle({ default: { limit: 6, ttl: 60000 } })
 	@Post('register')
 	@UseInterceptors(RegistrationFileInterceptor, FileValidationInterceptor)
 	@UseFilters(FileCleanupFilter)
@@ -68,7 +68,6 @@ export class AuthController {
 		return await this.registerService.register(req, body);
 	}
 
-	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post('register/resend-otp')
 	async registerResendOtp(
 		@Req() req: Request,
@@ -77,7 +76,6 @@ export class AuthController {
 		return await this.registerService.registerResendOtp(req, body);
 	}
 
-	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post('register/verify-otp')
 	async registerVerifyOtp(
 		@Req() req: Request,
@@ -86,19 +84,16 @@ export class AuthController {
 		return await this.registerService.registerVerifyOtp(req, body);
 	}
 
-	@Throttle({ default: { limit: 6, ttl: 60000 } })
 	@Post('login')
 	async login(@Req() req: Request, @Body() body: LoginDto) {
 		return await this.loginService.login(req, body);
 	}
 
-	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post('login/resend-otp')
 	async loginResendOtp(@Req() req: Request, @Body() body: LoginResendOtpDto) {
 		return await this.loginService.loginResendOtp(req, body);
 	}
 
-	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post('login/verify-otp')
 	async loginVerifyOtp(
 		@Req() req: ExpressRequest,
@@ -108,7 +103,6 @@ export class AuthController {
 		return await this.loginService.loginVerifyOtp(req, res, body);
 	}
 
-	@Throttle({ default: { limit: 5, ttl: 60000 } })
 	@Post('refresh')
 	async refresh(
 		@Req() req: ExpressRequest,
@@ -118,7 +112,6 @@ export class AuthController {
 		return await this.loginService.refresh(req, res, body);
 	}
 
-	@Throttle({ default: { limit: 5, ttl: 60000 } })
 	@Post('logout')
 	async logout(
 		@Req() req: ExpressRequest,
@@ -128,7 +121,6 @@ export class AuthController {
 		return await this.loginService.logout(req, res, body);
 	}
 
-	@Throttle({ default: { limit: 6, ttl: 60000 } })
 	@Post('password-reset')
 	async passwordResetInitiate(
 		@Req() req: Request,
@@ -137,7 +129,6 @@ export class AuthController {
 		return await this.passwordResetService.passwordResetInitiate(req, body);
 	}
 
-	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post('password-reset/resend-otp')
 	async passwordResetResendOtp(
 		@Req() req: Request,
@@ -146,7 +137,6 @@ export class AuthController {
 		return await this.passwordResetService.passwordResetResendOtp(req, body);
 	}
 
-	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post('password-reset/confirm')
 	async passwordResetConfirm(
 		@Req() req: Request,

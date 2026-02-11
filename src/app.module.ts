@@ -4,6 +4,8 @@ import { DatabaseModule } from '@db/database.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { EmailModule } from '@email/email.module';
 import { LoggerModule } from 'nestjs-pino';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
 	imports: [
@@ -15,6 +17,12 @@ import { LoggerModule } from 'nestjs-pino';
 					: '.env.development',
 			ignoreEnvFile: process.env.DOCKER_ENV === 'false',
 		}),
+
+		ThrottlerModule.forRoot([{
+			name: 'default',
+			ttl: 60000,
+			limit: 30,
+		}]),
 
 		LoggerModule.forRoot({
 			pinoHttp: {
@@ -41,6 +49,11 @@ import { LoggerModule } from 'nestjs-pino';
 	],
 	exports: [],
 	controllers: [],
-	providers: [],
+	providers: [
+		{
+			provide: APP_GUARD,
+			useClass: ThrottlerGuard,
+		},
+	],
 })
 export class AppModule {}

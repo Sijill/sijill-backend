@@ -1,8 +1,4 @@
-import {
-	ExceptionFilter,
-	Catch,
-	ArgumentsHost,
-} from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost } from '@nestjs/common';
 import { MulterRequest } from '../interfaces/multer-request.interface';
 import * as fs from 'fs';
 import * as path from 'path';
