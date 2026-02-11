@@ -8,6 +8,26 @@ import {
 	Res,
 	Request,
 } from '@nestjs/common';
+
+import {
+	LoginDto,
+	LoginResendOtpDto,
+	LoginVerifyOtpDto,
+	RefreshTokenDto,
+	LogoutDto,
+} from './dto/login.dto';
+
+import {
+	PasswordResetConfirmDto,
+	PasswordResetInitiateDto,
+	PasswordResetResendOtpDto,
+} from './dto/reset-password.dto';
+
+import type {
+	Request as ExpressRequest,
+	Response as ExpressResponse,
+} from 'express';
+
 import { RegistrationFileInterceptor } from './interceptors/registration.interceptor';
 import { FileValidationInterceptor } from './interceptors/file-validation.interceptor';
 import { RegistrationBodyPipe } from './pipes/registration.pipe';
@@ -18,25 +38,9 @@ import { LabRegistrationDto } from './dto/lab-registration.dto';
 import { ImagingRegistrationDto } from './dto/imaging-registration.dto';
 import { FileCleanupFilter } from './filters/cleanup.filter';
 import { RegisterVerifyOtpDto, RegisterResendOtpDto } from './dto/register.dto';
-import {
-	LoginDto,
-	LoginResendOtpDto,
-	LoginVerifyOtpDto,
-	RefreshTokenDto,
-	LogoutDto,
-} from './dto/login.dto';
 import { RegisterService } from './services/register.service';
 import { LoginService } from './services/login.service';
 import { PasswordResetService } from './services/reset-password.service';
-import type {
-	Request as ExpressRequest,
-	Response as ExpressResponse,
-} from 'express';
-import {
-	PasswordResetConfirmDto,
-	PasswordResetInitiateDto,
-	PasswordResetResendOtpDto,
-} from './dto/reset-password.dto';
 import { Throttle } from '@nestjs/throttler';
 
 export type RegistrationBody =

@@ -6,12 +6,14 @@ import {
 	NotFoundException,
 	BadRequestException,
 } from '@nestjs/common';
-import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
+
 import {
 	PasswordResetInitiateDto,
 	PasswordResetResendOtpDto,
 	PasswordResetConfirmDto,
 } from '../dto/reset-password.dto';
+
+import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
 import { InvalidOtpException } from '../exceptions/auth.exceptions';
 import { generateOtp } from '@helpers/crypto.helper';
 import { constructOtpPasswordResetTemplate } from '@email/templates/password-reset-otp.template';
@@ -20,13 +22,17 @@ import { timeUntilExpiryReadable } from '@helpers/time.helper';
 import * as bcrypt from 'bcrypt';
 import { EmailCategory } from '@common/enums/email.enums';
 import { PasswordResetInitiateResult } from '../interfaces/reset-password-repository.interface';
+import { PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class PasswordResetService {
 	constructor(
 		private readonly passwordResetRepository: PasswordResetRepository,
 		private readonly emailService: EmailService,
-	) {}
+		private readonly logger: PinoLogger,
+	) {
+		this.logger.setContext(PasswordResetService.name);
+	}
 
 	async passwordResetInitiate(req: Request, body: PasswordResetInitiateDto) {
 		try {
@@ -75,7 +81,7 @@ export class PasswordResetService {
 				throw error;
 			}
 
-			console.log('Password Reset Initiate Error: ', error);
+			this.logger.error('Password Reset Initiate Error: ', error);
 			throw new InternalServerErrorException(
 				'Password reset initiation failed, please try again.',
 			);
@@ -122,7 +128,7 @@ export class PasswordResetService {
 				throw error;
 			}
 
-			console.log('Password Reset Resend OTP Error: ', error);
+			this.logger.error('Password Reset Resend OTP Error: ', error);
 			throw new InternalServerErrorException(
 				'Resend OTP failed, please try again.',
 			);
@@ -164,7 +170,7 @@ export class PasswordResetService {
 				throw error;
 			}
 
-			console.log('Password Reset Confirm Error: ', error);
+			this.logger.error('Password Reset Confirm Error: ', error);
 			throw new InternalServerErrorException(
 				'Password reset failed, please try again.',
 			);

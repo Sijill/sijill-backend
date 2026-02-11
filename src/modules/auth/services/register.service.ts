@@ -71,8 +71,8 @@ export class RegisterService {
 			const ipAddress: any = req.ip || req.socket.remoteAddress;
 			const userAgent: any = req.headers['user-agent'] || 'unknown';
 
-			const registrationExpiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
-			const otpExpiresAt: Date = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+			const registrationExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+			const otpExpiresAt: Date = new Date(Date.now() + 5 * 60 * 1000);
 
 			const registrationSessionData: RegistrationSessionData = {
 				email: body.email,
@@ -102,7 +102,7 @@ export class RegisterService {
 			const emailPayload: EmailPayload = {
 				to: emailAddress,
 				subject: 'Email Verification',
-				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process`,
+				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process.`,
 				html: constructOtpRegistrationTemplate(
 					timeUntilExpiryReadable(otpExpiresAt),
 					otp,
@@ -126,9 +126,9 @@ export class RegisterService {
 				throw error;
 			}
 
-			console.log('Registration Error: ', error);
+			this.logger.error('Registration Error: ', error);
 			throw new InternalServerErrorException(
-				'Registration failed, please try again.',
+				'Registration failed, please try again.'
 			);
 		}
 	}
@@ -157,7 +157,7 @@ export class RegisterService {
 			const emailPayload: EmailPayload = {
 				to: emailAddress,
 				subject: 'Email Verification',
-				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process`,
+				text: `You've requested to verify your account. Please use the verification code ${otp} to complete the process.`,
 				html: constructOtpRegistrationTemplate(
 					timeUntilExpiryReadable(dbResult.otpExpiresAt),
 					otp,
@@ -183,7 +183,7 @@ export class RegisterService {
 				throw error;
 			}
 
-			console.log('Resend OTP Error: ', error);
+			this.logger.error('Resend OTP Error: ', error);
 			throw new InternalServerErrorException(
 				'Resend OTP failed, please try again.',
 			);
@@ -237,7 +237,7 @@ export class RegisterService {
 				throw error;
 			}
 
-			console.log('Verify OTP Error: ', error);
+			this.logger.error('Verify OTP Error: ', error);
 			throw new InternalServerErrorException(
 				'OTP verification failed, please try again.',
 			);

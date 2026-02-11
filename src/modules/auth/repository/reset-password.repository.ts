@@ -1,8 +1,3 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
-import { DatabaseService } from '@db/database.service';
-import { PoolClient } from 'pg';
-import { MfaMethod, AccountStatus } from '@common/enums/db.enum';
-import { DatabaseOperationException } from '../exceptions/auth.exceptions';
 import {
 	PasswordResetInitiateData,
 	PasswordResetInitiateResult,
@@ -11,6 +6,7 @@ import {
 	ResetSessionWithOtp,
 	PasswordResetConfirmData,
 } from '../interfaces/reset-password-repository.interface';
+
 import {
 	ResetSessionExpiredException,
 	ResetSessionNotFoundException,
@@ -19,9 +15,21 @@ import {
 	OtpExpiredException,
 } from '../exceptions/auth.exceptions';
 
+import { Injectable, ForbiddenException } from '@nestjs/common';
+import { DatabaseService } from '@db/database.service';
+import { PoolClient } from 'pg';
+import { MfaMethod, AccountStatus } from '@common/enums/db.enum';
+import { DatabaseOperationException } from '../exceptions/auth.exceptions';
+import { PinoLogger } from 'nestjs-pino';
+
 @Injectable()
 export class PasswordResetRepository {
-	constructor(private readonly databaseService: DatabaseService) {}
+	constructor(
+		private readonly databaseService: DatabaseService,
+		private readonly logger: PinoLogger,
+	) {
+		this.logger.setContext(PasswordResetRepository.name);
+	}
 
 	async passwordResetInitiate(
 		data: PasswordResetInitiateData,

@@ -2,18 +2,17 @@ import {
 	ExceptionFilter,
 	Catch,
 	ArgumentsHost,
-	HttpException,
-	HttpStatus,
-	Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
 import { MulterRequest } from '../interfaces/multer-request.interface';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PinoLogger } from 'nestjs-pino';
 
 @Catch()
 export class FileCleanupFilter implements ExceptionFilter {
-	private readonly logger = new Logger(FileCleanupFilter.name);
+	constructor(private readonly logger: PinoLogger) {
+		this.logger.setContext(FileCleanupFilter.name);
+	}
 
 	catch(exception: unknown, host: ArgumentsHost): void {
 		const ctx = host.switchToHttp();

@@ -1,9 +1,11 @@
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import {
 	multerStorage,
 	multerLimits,
 	multerFileFilter,
 } from '@common/multer/multer.config';
+
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+
 
 export const RegistrationFileInterceptor = FileFieldsInterceptor(
 	[

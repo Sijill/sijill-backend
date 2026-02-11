@@ -4,11 +4,7 @@ import {
 	ForbiddenException,
 	HttpException,
 } from '@nestjs/common';
-import { DatabaseService } from '@db/database.service';
-import { PoolClient } from 'pg';
-import * as bcrypt from 'bcrypt';
-import { MfaMethod, AccountStatus } from '@common/enums/db.enum';
-import { DatabaseOperationException } from '../exceptions/auth.exceptions';
+
 import {
 	LoginData,
 	LoginResult,
@@ -17,6 +13,7 @@ import {
 	LoginSessionWithOtp,
 	InvalidateTokensData,
 } from '../interfaces/login-repository.interface';
+
 import {
 	LoginSessionExpiredException,
 	LoginSessionNotFoundException,
@@ -27,13 +24,26 @@ import {
 	RefreshTokenRevokedException,
 	InvalidRefreshTokenException,
 } from '../exceptions/auth.exceptions';
+
+import { DatabaseService } from '@db/database.service';
+import { PoolClient } from 'pg';
+import * as bcrypt from 'bcrypt';
+import { MfaMethod, AccountStatus } from '@common/enums/db.enum';
+import { DatabaseOperationException } from '../exceptions/auth.exceptions';
 import * as jwt from 'jsonwebtoken';
 import * as crypto from 'crypto';
 import { validate as isUuid } from 'uuid';
+import { PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class LoginRepository {
-	constructor(private readonly databaseService: DatabaseService) {}
+	constructor(
+		private readonly databaseService: DatabaseService,
+		private readonly logger: PinoLogger,
+	) {
+		this.logger.setContext(LoginRepository.name);
+	}
+
 	async login(loginData: LoginData): Promise<LoginResult> {
 		const client: PoolClient = await this.databaseService.getClient();
 
@@ -158,7 +168,7 @@ export class LoginRepository {
 				[data.email],
 			);
 		} catch (error) {
-			console.error('Failed to invalidate previous tokens:', error);
+			this.logger.error('Failed to invalidate previous tokens:', error);
 		} finally {
 			client.release();
 		}

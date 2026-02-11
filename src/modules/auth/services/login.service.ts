@@ -7,7 +7,7 @@ import {
 	NotFoundException,
 	BadRequestException,
 } from '@nestjs/common';
-import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
+
 import {
 	LoginDto,
 	LoginResendOtpDto,
@@ -15,6 +15,13 @@ import {
 	RefreshTokenDto,
 	LogoutDto,
 } from '../dto/login.dto';
+
+import {
+	Request as ExpressRequest,
+	Response as ExpressResponse,
+} from 'express';
+
+import { EmailPayload, EmailService, EmailAddress } from '@email/email.service';
 import { InvalidOtpException } from '../exceptions/auth.exceptions';
 import { generateOtp } from '@helpers/crypto.helper';
 import { constructOtpMfaTemplate } from '@email/templates/login-otp.template';
@@ -23,18 +30,18 @@ import { timeUntilExpiryReadable } from '@helpers/time.helper';
 import * as bcrypt from 'bcrypt';
 import { EmailCategory } from '@common/enums/email.enums';
 import { LoginResult } from '../interfaces/login-repository.interface';
-import {
-	Request as ExpressRequest,
-	Response as ExpressResponse,
-} from 'express';
 import { validate as isUuid } from 'uuid';
+import { PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class LoginService {
 	constructor(
 		private readonly loginRepository: LoginRepository,
 		private readonly emailService: EmailService,
-	) {}
+		private readonly logger: PinoLogger,
+	) {
+		this.logger.setContext(LoginService.name);
+	}
 
 	async login(req: Request, body: LoginDto) {
 		try {
@@ -90,7 +97,7 @@ export class LoginService {
 				throw error;
 			}
 
-			console.log('Login Error: ', error);
+			this.logger.error('Login Error: ', error);
 			throw new InternalServerErrorException('Login failed, please try again.');
 		}
 	}
@@ -134,7 +141,7 @@ export class LoginService {
 				throw error;
 			}
 
-			console.log('Resend Login OTP Error: ', error);
+			this.logger.error('Resend Login OTP Error: ', error);
 			throw new InternalServerErrorException(
 				'Resend OTP failed, please try again.',
 			);
@@ -197,7 +204,7 @@ export class LoginService {
 				throw error;
 			}
 
-			console.log('Verify Login OTP Error: ', error);
+			this.logger.error('Verify Login OTP Error: ', error);
 			throw new InternalServerErrorException(
 				'OTP verification failed, please try again.',
 			);
@@ -263,7 +270,7 @@ export class LoginService {
 				throw error;
 			}
 
-			console.log('Refresh Token Error: ', error);
+			this.logger.error('Refresh Token Error: ', error);
 			throw new InternalServerErrorException(
 				'Token refresh failed, please try again.',
 			);
@@ -310,7 +317,7 @@ export class LoginService {
 				throw error;
 			}
 
-			console.log('Logout Error: ', error);
+			this.logger.error('Logout Error: ', error);
 			throw new InternalServerErrorException(
 				'Logout failed, please try again.',
 			);

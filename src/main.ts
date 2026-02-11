@@ -22,7 +22,7 @@ import * as path from 'path';
 			fs.mkdirSync(fullPath, { recursive: true });
 		}
 	});
-	
+
 	validateConfig();
 
 	app.useLogger(app.get(Logger));

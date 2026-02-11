@@ -1,6 +1,3 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { DatabaseService } from '@db/database.service';
-import { PoolClient } from 'pg';
 import {
 	RegistrationSessionData,
 	OtpData,
@@ -9,6 +6,7 @@ import {
 	ResendOtpResult,
 	RegistrationSessionWithOtp,
 } from '../interfaces/register-repository.interface';
+
 import {
 	DatabaseOperationException,
 	RegistrationSessionNotFoundException,
@@ -17,11 +15,21 @@ import {
 	OtpAlreadyUsedException,
 	OtpExpiredException,
 } from '../exceptions/auth.exceptions';
+
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { DatabaseService } from '@db/database.service';
+import { PoolClient } from 'pg';
 import { FileType, AccountStatus, MfaMethod } from '@common/enums/db.enum';
+import { PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class RegisterRepository {
-	constructor(private readonly databaseService: DatabaseService) {}
+	constructor(
+		private readonly databaseService: DatabaseService,
+		private readonly logger: PinoLogger,
+	) {
+		this.logger.setContext(RegisterRepository.name);
+	}
 
 	async findByEmail(email: string) {
 		return this.databaseService.query(
@@ -87,11 +95,11 @@ export class RegisterRepository {
 			await client.query('ROLLBACK');
 
 			if (error.code === '23505') {
-				throw new BadRequestException('Email already exists');
+				throw new BadRequestException('Email already exists.');
 			}
 
 			throw new DatabaseOperationException(
-				`Database operation failed: ${error.message}`,
+				`Database operation failed: ${error.message}.`,
 			);
 		} finally {
 			client.release();
@@ -164,7 +172,7 @@ export class RegisterRepository {
 				throw error;
 			}
 			throw new DatabaseOperationException(
-				`Database operation failed: ${error.message}`,
+				`Database operation failed: ${error.message}.`,
 			);
 		} finally {
 			client.release();
@@ -377,7 +385,7 @@ export class RegisterRepository {
 			}
 
 			throw new DatabaseOperationException(
-				`Database operation failed: ${error.message}`,
+				`Database operation failed: ${error.message}.`,
 			);
 		} finally {
 			client.release();
@@ -531,9 +539,9 @@ export class RegisterRepository {
 					break;
 			}
 		} catch (error) {
-			console.error('Error storing registration documents:', error);
+			this.logger.error('Error storing registration documents:', error);
 			throw new DatabaseOperationException(
-				`Failed to store registration documents: ${error.message}`,
+				`Failed to store registration documents: ${error.message}.`,
 			);
 		}
 	}

@@ -25,7 +25,7 @@ export class StatusGuard implements CanActivate {
 		);
 
 		if (result.rowCount === 0) {
-			throw new ForbiddenException('User not found.');
+			throw new ForbiddenException('User not found');
 		}
 
 		const status: AccountStatus = result.rows[0].account_status;
@@ -36,7 +36,7 @@ export class StatusGuard implements CanActivate {
 			status === AccountStatus.SUSPENDED ||
 			status === AccountStatus.PENDING
 		) {
-			throw new ForbiddenException(`Account is ${status.toLowerCase()}`);
+			throw new ForbiddenException(`Account is ${status.toLowerCase()}.`);
 		}
 
 		return true;

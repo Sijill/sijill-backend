@@ -1,8 +1,13 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import { Pool, PoolClient } from 'pg';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
+	constructor(private readonly logger: PinoLogger) {
+		logger.setContext(DatabaseService.name);
+	}
+
 	private pool: Pool;
 
 	async onModuleInit() {
@@ -19,17 +24,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
 		try {
 			const client = await this.pool.connect();
-			console.log('Database connected successfully');
+			this.logger.info('Database connected successfully');
 			client.release();
 		} catch (error) {
-			console.error('Database connection failed:', error);
+			this.logger.error('Database connection failed:', error);
 			throw error;
 		}
 	}
 
 	async onModuleDestroy() {
 		await this.pool.end();
-		console.log('Database connection pool closed');
+		this.logger.warn('Database connection pool closed');
 	}
 
 	async getClient(): Promise<PoolClient> {

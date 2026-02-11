@@ -57,7 +57,7 @@ export class LoginSessionNotFoundException extends NotFoundException {
 
 export class LoginSessionExpiredException extends BadRequestException {
 	constructor() {
-		super('Login session has expired. Please login again.');
+		super('Login session has expired. Please login again');
 	}
 }
 
@@ -75,7 +75,7 @@ export class RefreshTokenRevokedException extends UnauthorizedException {
 
 export class RefreshTokenExpiredException extends UnauthorizedException {
 	constructor() {
-		super('Refresh token has expired. Please login again.');
+		super('Refresh token has expired. Please login again');
 	}
 }
 
@@ -87,7 +87,7 @@ export class ResetSessionNotFoundException extends NotFoundException {
 
 export class ResetSessionExpiredException extends ForbiddenException {
 	constructor() {
-		super('Password reset session has expired. Please request a new one.');
+		super('Password reset session has expired. Please request a new one');
 	}
 }
 
@@ -99,8 +99,6 @@ export class EmailAlreadyInUseException extends ConflictException {
 
 export class PendingRegistrationExistsException extends ConflictException {
 	constructor() {
-		super(
-			'A registration with this email already exists and is pending verification',
-		);
+		super('A registration with this email already exists and is pending verification');
 	}
 }
