@@ -18,6 +18,7 @@
       "@db/*": ["src/modules/database/*"],
       "@email/*": ["src/modules/email/*"],
       "@modules/*": ["src/modules/*"],
+      "@guards/*": ["src/modules/auth/guards/*"],
       "@helpers/*": ["src/common/helpers/*"],
       "@common/*": ["src/common/*"],
       "@uploads": ["uploads"]
@@ -30,7 +31,7 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
   },
-  
+  "include": ["src/**/*"],
   "ts-node": {
     "require": ["tsconfig-paths/register"]
   }

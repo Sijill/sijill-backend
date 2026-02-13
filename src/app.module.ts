@@ -6,6 +6,7 @@ import { EmailModule } from '@email/email.module';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { AdminModule } from '@modules/admin/admin.module';
 
 @Module({
 	imports: [
@@ -18,11 +19,13 @@ import { APP_GUARD } from '@nestjs/core';
 			ignoreEnvFile: process.env.DOCKER_ENV === 'false',
 		}),
 
-		ThrottlerModule.forRoot([{
-			name: 'default',
-			ttl: 60000,
-			limit: 30,
-		}]),
+		ThrottlerModule.forRoot([
+			{
+				name: 'default',
+				ttl: 60000,
+				limit: 30,
+			},
+		]),
 
 		LoggerModule.forRoot({
 			pinoHttp: {
@@ -46,6 +49,7 @@ import { APP_GUARD } from '@nestjs/core';
 		DatabaseModule,
 		EmailModule,
 		AuthModule,
+		AdminModule,
 	],
 	exports: [],
 	controllers: [],

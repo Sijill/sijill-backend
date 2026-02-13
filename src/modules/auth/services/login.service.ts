@@ -191,6 +191,7 @@ export class LoginService {
 					secure: process.env.NODE_ENV === 'production',
 					sameSite: 'strict',
 					maxAge: 7 * 24 * 60 * 60 * 1000,
+					path: '/api/v1/auth/refresh',
 				});
 			}
 
@@ -257,6 +258,7 @@ export class LoginService {
 					secure: process.env.NODE_ENV === 'production',
 					sameSite: 'strict',
 					maxAge: 7 * 24 * 60 * 60 * 1000,
+					path: '/api/v1/auth/refresh',
 				});
 			}
 
@@ -305,6 +307,7 @@ export class LoginService {
 					httpOnly: true,
 					secure: process.env.NODE_ENV === 'production',
 					sameSite: 'strict',
+					path: '/api/v1/auth/refresh',
 				});
 			}
 

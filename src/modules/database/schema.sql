@@ -39,20 +39,34 @@ CREATE TABLE users (
     account_status account_status DEFAULT 'PENDING',
     email_verified BOOLEAN,
     mfa_method mfa_method NOT NULL DEFAULT 'NONE',
-    mfa_secret TEXT, --only for TOTP MFA
+    mfa_secret TEXT,
 
     verified_at TIMESTAMP WITH TIME ZONE,
     verified_by UUID REFERENCES users(id),
+
+    rejected_at TIMESTAMP WITH TIME ZONE,
+    rejected_by UUID REFERENCES users(id),
     rejection_reason TEXT,
+
+    suspended_at TIMESTAMP WITH TIME ZONE,
+    suspended_by UUID REFERENCES users(id),
+    suspention_reason TEXT,
+
+    deactivated_at TIMESTAMP WITH TIME ZONE,
+    deactivated_by UUID REFERENCES users(id),
+    deactivation_reason TEXT,
 
     last_login_at TIMESTAMP WITH TIME ZONE,
     last_login_ip INET,
-    failed_login_attempts INT,
     locked_until TIMESTAMP WITH TIME ZONE,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+CREATE INDEX idx_users_pending_verification
+ON users (id DESC)
+WHERE account_status = 'PENDING';
 
 CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

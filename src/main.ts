@@ -27,6 +27,13 @@ import * as path from 'path';
 
 	app.useLogger(app.get(Logger));
 
+	app.enableCors({
+		origin: (origin, callback) => {
+			callback(null, true);
+		},
+		credentials: true,
+	});
+
 	app.useGlobalPipes(
 		new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
 	);
