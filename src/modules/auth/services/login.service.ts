@@ -32,6 +32,7 @@ import { EmailCategory } from '@common/enums/email.enums';
 import { LoginResult } from '../interfaces/login-repository.interface';
 import { validate as isUuid } from 'uuid';
 import { PinoLogger } from 'nestjs-pino';
+import { getCookieConfig } from '@common/config/cookie.config';
 
 @Injectable()
 export class LoginService {
@@ -186,13 +187,7 @@ export class LoginService {
 			if (body.platform === 'mobile') {
 				response['refreshToken'] = refreshToken;
 			} else {
-				res.cookie('refreshToken', refreshToken, {
-					httpOnly: true,
-					secure: process.env.NODE_ENV === 'production',
-					sameSite: 'strict',
-					maxAge: 7 * 24 * 60 * 60 * 1000,
-					path: '/api/v1/auth/refresh',
-				});
+				res.cookie('refreshToken', refreshToken, getCookieConfig());
 			}
 
 			return response;
@@ -253,13 +248,7 @@ export class LoginService {
 			if (body.platform === 'mobile') {
 				response['refreshToken'] = newRefreshToken;
 			} else {
-				res.cookie('refreshToken', newRefreshToken, {
-					httpOnly: true,
-					secure: process.env.NODE_ENV === 'production',
-					sameSite: 'strict',
-					maxAge: 7 * 24 * 60 * 60 * 1000,
-					path: '/api/v1/auth/refresh',
-				});
+				res.cookie('refreshToken', newRefreshToken, getCookieConfig());
 			}
 
 			return response;
@@ -303,12 +292,7 @@ export class LoginService {
 			await this.loginRepository.logout(refreshToken);
 
 			if (body.platform === 'web') {
-				res.clearCookie('refreshToken', {
-					httpOnly: true,
-					secure: process.env.NODE_ENV === 'production',
-					sameSite: 'strict',
-					path: '/api/v1/auth/refresh',
-				});
+				res.clearCookie('refreshToken', getCookieConfig());
 			}
 
 			return {
