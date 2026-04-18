@@ -9,18 +9,28 @@ CREATE EXTENSION IF NOT EXISTS citext;
 CREATE TYPE user_role AS ENUM ('PATIENT','HEALTHCARE_PROVIDER','LAB','IMAGING_CENTER','ADMIN');
 CREATE TYPE account_status AS ENUM ('PENDING','VERIFIED','REJECTED','SUSPENDED','DEACTIVATED');
 CREATE TYPE mfa_method AS ENUM ('NONE', 'EMAIL_OTP', 'SMS_OTP', 'TOTP');
+CREATE TYPE access_type AS ENUM ('READ_ONLY','WRITE_ONLY', 'READ_WRITE');
+CREATE TYPE access_status AS ENUM ('ACTIVE','EXPIRED','REVOKED');
+
 CREATE TYPE gender AS ENUM ('MALE','FEMALE');
 CREATE TYPE blood_type AS ENUM ('A+','A-','B+','B-','AB+','AB-','O+','O-','UNKNOWN');
 CREATE TYPE emergency_contact_relationship AS ENUM ('PARENT', 'SPOUSE', 'SIBLING', 'FRIEND', 'CAREGIVER', 'OTHER');
 CREATE TYPE allergy_severity AS ENUM ('MILD','MODERATE','SEVERE','LIFE_THREATENING');
-CREATE TYPE test_priority AS ENUM ('HIGH', 'MEDIUM', 'LOW');
-CREATE TYPE access_type AS ENUM ('READ_ONLY','WRITE_ONLY', 'READ_WRITE');
-CREATE TYPE access_status AS ENUM ('ACTIVE','EXPIRED','REVOKED');
+
 CREATE TYPE order_type AS ENUM ('LABORATORY','IMAGING');
+CREATE TYPE order_priority AS ENUM ('ROUTINE', 'URGENT', 'STAT');
 CREATE TYPE order_status AS ENUM ('PENDING','IN_PROGRESS','COMPLETED','CANCELLED');
+
+CREATE TYPE dosage_unit AS ENUM ('MG','MCG','G','ML','IU','UNITS','DROPS','PUFFS','TABLETS','CAPSULES','TEASPOONS');
 CREATE TYPE medication_form AS ENUM ('TABLET','CAPSULE','LIQUID','INJECTION','TOPICAL','INHALER','DROPS','PATCH','OTHER');
+CREATE TYPE medication_frequency AS ENUM (
+    'ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY',
+    'EVERY_6_HOURS','EVERY_8_HOURS','EVERY_12_HOURS',
+    'ONCE_WEEKLY','TWICE_WEEKLY','ONCE_MONTHLY','AS_NEEDED');
+
 CREATE TYPE diagnosis_status AS ENUM ('ACTIVE','RESOLVED_BY_HCP','RESOLVED_BY_PATIENT');
 CREATE TYPE patient_outcome AS ENUM ('FULLY_RECOVERED','IMPROVED','NO_CHANGE','WORSE');
+
 CREATE TYPE notification_type AS ENUM ('MEDICATION_REMINDER','APPOINTMENT_REMINDER','MEDICAL_ORDER', 'FOLLOW_UP','SYSTEM');
 CREATE TYPE notification_status AS ENUM ('PENDING','SENT','READ');
 CREATE TYPE file_type AS ENUM ('NATIONAL_ID_FRONT','NATIONAL_ID_BACK','SELFIE_WITH_ID','MEDICAL_LICENSE',
@@ -79,6 +89,8 @@ CREATE TABLE patients (
     date_of_birth DATE NOT NULL,
     national_id VARCHAR(50) CHECK (national_id ~ '^[0-9]{14}$') NOT NULL,
     blood_type blood_type,
+    weight_kg INTEGER,
+    height_cm INTEGER,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -148,21 +160,6 @@ CREATE TABLE patient_emergency_contacts (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-CREATE TABLE patient_chronic_conditions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id UUID REFERENCES patients(id),
-
-    icd11_code VARCHAR(20),
-    icd11_title VARCHAR(500),
-    notes TEXT,
-
-    diagnosed_by UUID REFERENCES healthcare_providers(id),
-    diagnosed_date DATE,
-
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
 CREATE TABLE patient_allergies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID REFERENCES patients(id),
@@ -188,9 +185,19 @@ CREATE TABLE clinical_encounters (
 
     encounter_date TIMESTAMP WITH TIME ZONE,
     location_address TEXT,
-    symptoms_complaints TEXT,
     next_appointment_date TIMESTAMP WITH TIME ZONE,
     appointment_notes TEXT,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE encounter_symptoms_complaints (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    encounter_id UUID NOT NULL REFERENCES clinical_encounters(id) ON DELETE CASCADE,
+
+    title VARCHAR(500) NOT NULL,
+    description TEXT,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -204,6 +211,7 @@ CREATE TABLE diagnoses (
     icd11_code VARCHAR(20),
     icd11_title VARCHAR(500),
     clinical_description TEXT,
+    is_chronic BOOLEAN NOT NULL DEFAULT FALSE,
 
     status diagnosis_status,
     diagnosed_date TIMESTAMP WITH TIME ZONE,
@@ -246,9 +254,10 @@ CREATE TABLE medications (
     prescribed_by_hcp_id UUID REFERENCES healthcare_providers(id),
 
     medication_name VARCHAR(500),
-    dosage VARCHAR(200),
+    dosage_amount NUMERIC(10,2),
+    dosage_unit dosage_unit,
     form medication_form,
-    frequency VARCHAR(200),
+    frequency medication_frequency,
     start_date DATE,
     end_date DATE,
     instructions TEXT,
@@ -278,6 +287,47 @@ CREATE TABLE documents (
     uploaded_at TIMESTAMP WITH TIME ZONE
 );
 
+CREATE TABLE ref_imaging_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE ref_body_parts (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE ref_test_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE ref_specimen_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+INSERT INTO ref_imaging_types (name) VALUES
+('X-RAY'),('CT_SCAN'),('MRI'),('ULTRASOUND'),('PET_SCAN'),
+('MAMMOGRAPHY'),('FLUOROSCOPY'),('ECHOCARDIOGRAPHY'),('DEXA_SCAN'),('ANGIOGRAPHY');
+
+INSERT INTO ref_body_parts (name) VALUES
+('HEAD'),('NECK'),('CHEST'),('ABDOMEN'),('PELVIS'),('SPINE'),
+('SHOULDER'),('ELBOW'),('WRIST'),('HAND'),('HIP'),('KNEE'),
+('ANKLE'),('FOOT'),('FULL_BODY'),('UPPER_EXTREMITY'),('LOWER_EXTREMITY');
+
+INSERT INTO ref_test_types (name) VALUES
+('COMPLETE_BLOOD_COUNT'),('BASIC_METABOLIC_PANEL'),('COMPREHENSIVE_METABOLIC_PANEL'),
+('LIPID_PANEL'),('THYROID_FUNCTION'),('LIVER_FUNCTION'),('KIDNEY_FUNCTION'),
+('URINALYSIS'),('BLOOD_GLUCOSE'),('HBA1C'),('COAGULATION_PANEL'),
+('BLOOD_CULTURE'),('URINE_CULTURE'),('STI_PANEL'),('HEPATITIS_PANEL'),
+('HIV_TEST'),('PREGNANCY_TEST'),('VITAMIN_D'),('IRON_PANEL'),('CARDIAC_ENZYMES');
+
+INSERT INTO ref_specimen_types (name) VALUES
+('BLOOD'),('URINE'),('STOOL'),('SALIVA'),('SWAB'),
+('TISSUE_BIOPSY'),('SPUTUM'),('CEREBROSPINAL_FLUID'),('PLEURAL_FLUID'),('BONE_MARROW');
+
+
 CREATE TABLE medical_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     encounter_id UUID REFERENCES clinical_encounters(id),
@@ -294,22 +344,15 @@ CREATE TABLE medical_orders (
     updated_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE TABLE lab_tests (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code VARCHAR(50) UNIQUE NOT NULL,   -- e.g., "CBC", "LFT", "CRP"
-    name VARCHAR(200) NOT NULL       -- e.g., "Complete Blood Count", "Liver Function Test"
-);
-
 CREATE TABLE lab_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     medical_order_id UUID NOT NULL UNIQUE REFERENCES medical_orders(id),
     
-    lab_test_id UUID REFERENCES lab_tests(id),
-    specimen_type VARCHAR(100),
+    test_type_id INTEGER REFERENCES ref_test_types(id),
+    specimen_type_id INTEGER REFERENCES ref_specimen_types(id),
     fasting_required BOOLEAN,
-    priority test_priority,
-    clinical_indication TEXT,
-    special_instructions TEXT
+    priority order_priority,
+    clinical_indication TEXT
 );
 
 CREATE TABLE lab_results (
@@ -331,26 +374,15 @@ CREATE TABLE lab_result_documents (
     document_id UUID REFERENCES documents(id) ON DELETE CASCADE
 );
 
-CREATE TABLE imaging_modalities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) UNIQUE NOT NULL  -- e.g., "X-Ray", "MRI", "CT Scan", "Ultrasound"
-);
-
-CREATE TABLE body_parts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) UNIQUE NOT NULL  -- e.g., "Chest", "Brain", "Abdomen", "Knee"
-);
-
 CREATE TABLE imaging_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     medical_order_id UUID NOT NULL UNIQUE REFERENCES medical_orders(id),
     
-    imaging_type_id UUID REFERENCES imaging_modalities(id),
-    body_part_id UUID REFERENCES body_parts(id),
+    imaging_type_id INTEGER REFERENCES ref_imaging_types(id),
+    body_part_id INTEGER REFERENCES ref_body_parts(id),
     contrast_used BOOLEAN,
-    priority test_priority,
-    clinical_indication TEXT,
-    special_instructions TEXT
+    priority order_priority,
+    clinical_indication TEXT
 );
 
 CREATE TABLE imaging_results (
@@ -511,13 +543,13 @@ CREATE TABLE refresh_tokens (
 );
 
 
-CREATE TABLE patient_access_codes (
+CREATE TABLE patient_permission_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    issued_by_user_id UUID NOT NULL REFERENCES users(id),
 
     code_hash VARCHAR(255) NOT NULL UNIQUE,
+    entity_type user_role NOT NULL,
     access_type access_type NOT NULL,
     status access_status NOT NULL DEFAULT 'ACTIVE',
 
@@ -530,11 +562,11 @@ CREATE TABLE patient_access_codes (
 CREATE TABLE patient_access_grants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    access_code_id UUID NOT NULL REFERENCES patient_access_codes(id) ON DELETE CASCADE,
+    permission_token_id UUID NOT NULL REFERENCES patient_permission_tokens(id) ON DELETE CASCADE,
     grantee_user_id UUID NOT NULL REFERENCES users(id),
 
     granted_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     revoked_at TIMESTAMP WITH TIME ZONE,
 
-    UNIQUE (access_code_id, grantee_user_id)
+    UNIQUE (permission_token_id, grantee_user_id)
 );
