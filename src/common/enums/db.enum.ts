@@ -87,6 +87,20 @@ export enum MedicationForm {
 	OTHER = 'OTHER',
 }
 
+export enum DosageUnit {
+    MG = 'MG',
+    MCG = 'MCG',
+    G = 'G',
+    ML = 'ML',
+    IU = 'IU',
+    UNITS = 'UNITS',
+    DROPS = 'DROPS',
+    PUFFS = 'PUFFS',
+    TABLETS = 'TABLETS',
+    CAPSULES = 'CAPSULES',
+    TEASPOONS = 'TEASPOONS',
+}
+
 export enum PatientOutcome {
 	FULLY_RECOVERED = 'FULLY_RECOVERED',
 	IMPROVED = 'IMPROVED',
@@ -106,10 +120,10 @@ export enum OrderStatus {
 	CANCELLED = 'CANCELLED',
 }
 
-export enum TestPriority {
-	HIGH = 'HIGH',
-	MEDIUM = 'MEDIUM',
-	LOW = 'LOW',
+export enum OrderPriority {
+    ROUTINE = 'ROUTINE',
+    URGENT = 'URGENT',
+    STAT = 'STAT',
 }
 
 // MISC
