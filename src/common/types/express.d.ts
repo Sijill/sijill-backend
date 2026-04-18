@@ -1,4 +1,5 @@
 import { UserRole } from '@common/enums/db.enum';
+import type { ClinicalSessionTokenPayload } from '@modules/clinical/types/clinical-session.type';
 
 declare global {
 	namespace Express {
@@ -8,6 +9,7 @@ declare global {
 				email: string;
 				role: UserRole;
 			};
+			clinicalSession?: ClinicalSessionTokenPayload;
 		}
 	}
 }

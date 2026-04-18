@@ -2,6 +2,7 @@
 --------- EXTENSIONS ---------
 ------------------------------
 CREATE EXTENSION IF NOT EXISTS citext;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 ------------------------------
 ---- CUSTOM TYPES (ENUMS) ----
@@ -253,7 +254,7 @@ CREATE TABLE medications (
     dosage_amount NUMERIC(10,2),
     dosage_unit dosage_unit,
     form medication_form,
-    frequency medication_frequency,
+    frequency VARCHAR(500),
     start_date DATE,
     end_date DATE,
     instructions TEXT,
@@ -565,4 +566,97 @@ CREATE TABLE patient_access_grants (
     revoked_at TIMESTAMP WITH TIME ZONE,
 
     UNIQUE (permission_token_id, grantee_user_id)
+);
+
+------------------------------
+---------- SEED DATA ----------
+------------------------------
+
+-- Admin User
+INSERT INTO users (
+    id, email, phone_number, password_hash, role,
+    account_status, email_verified, mfa_method,
+    verified_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    'admin@gmail.com',
+    '12345678910',
+    '$2a$12$IPvROaRu/TcY7J679mr1C.rT4bSOEUWKJt.NnvR67/IyONOiSz0rq',
+    'ADMIN',
+    'VERIFIED',
+    true,
+    'EMAIL_OTP',
+    now(),
+    now(),
+    now()
+);
+
+-- Patient User
+INSERT INTO users (
+    id, email, phone_number, password_hash, role,
+    account_status, email_verified, mfa_method,
+    verified_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000002',
+    'patient@gmail.com',
+    '01012345678',
+    '$2a$12$IPvROaRu/TcY7J679mr1C.rT4bSOEUWKJt.NnvR67/IyONOiSz0rq',
+    'PATIENT',
+    'VERIFIED',
+    true,
+    'EMAIL_OTP',
+    now(),
+    now(),
+    now()
+);
+
+INSERT INTO patients (
+    id, user_id,
+    first_name, middle_name, surname,
+    gender, date_of_birth, national_id,
+    blood_type, weight_kg, height_cm,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000002',
+    'Sara', 'Ahmed', 'Jenkins',
+    'FEMALE', '1992-03-15', '29203150123456',
+    'O+', 65, 168,
+    now(), now()
+);
+
+-- HCP User
+INSERT INTO users (
+    id, email, phone_number, password_hash, role,
+    account_status, email_verified, mfa_method,
+    verified_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000003',
+    'hcp@gmail.com',
+    '01098765432',
+    '$2a$12$IPvROaRu/TcY7J679mr1C.rT4bSOEUWKJt.NnvR67/IyONOiSz0rq',
+    'HEALTHCARE_PROVIDER',
+    'VERIFIED',
+    true,
+    'EMAIL_OTP',
+    now(),
+    now(),
+    now()
+);
+
+INSERT INTO healthcare_providers (
+    id, user_id,
+    first_name, middle_name, surname,
+    gender, date_of_birth, national_id,
+    medical_license_number, specialization,
+    workplace_name, workplace_address,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000011',
+    '00000000-0000-0000-0000-000000000003',
+    'Khaled', 'Mohamed', 'Mostafa',
+    'MALE', '1985-07-20', '28507200456789',
+    'ML-2025-00123', 'Pulmonology',
+    'Cairo Medical Center', '12 Tahrir St, Cairo',
+    now(), now()
 );

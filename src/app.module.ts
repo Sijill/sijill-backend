@@ -7,6 +7,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AdminModule } from '@modules/admin/admin.module';
+import { ClinicalModule } from '@modules/clinical/clinical.module';
 
 @Module({
 	imports: [
@@ -50,6 +51,7 @@ import { AdminModule } from '@modules/admin/admin.module';
 		EmailModule,
 		AuthModule,
 		AdminModule,
+		ClinicalModule,
 	],
 	exports: [],
 	controllers: [],

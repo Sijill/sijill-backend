@@ -1,187 +1,187 @@
 import {
-    IsString,
-    IsBoolean,
-    IsOptional,
-    IsArray,
-    IsEnum,
-    IsInt,
-    IsDateString,
-    ValidateNested,
-    ArrayMinSize,
-    MaxLength,
-    Min,
-    IsNumber,
+	IsString,
+	IsBoolean,
+	IsOptional,
+	IsArray,
+	IsEnum,
+	IsInt,
+	IsDateString,
+	ValidateNested,
+	ArrayMinSize,
+	MaxLength,
+	Min,
+	IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
-    AllergySeverity,
-    DosageUnit,
-    MedicationForm,
-    OrderPriority,
+	AllergySeverity,
+	DosageUnit,
+	MedicationForm,
+	OrderPriority,
 } from '@common/enums/db.enum';
 
 export class SymptomInputDto {
-    @IsString()
-    @MaxLength(500)
-    title!: string;
+	@IsString()
+	@MaxLength(500)
+	title!: string;
 
-    @IsOptional()
-    @IsString()
-    description?: string;
+	@IsOptional()
+	@IsString()
+	description?: string;
 }
 
 export class DiagnosisInputDto {
-    @IsString()
-    @MaxLength(20)
-    icd11Code!: string;
+	@IsString()
+	@MaxLength(20)
+	icd11Code!: string;
 
-    @IsString()
-    @MaxLength(500)
-    icd11Title!: string;
+	@IsString()
+	@MaxLength(500)
+	icd11Title!: string;
 
-    @IsOptional()
-    @IsString()
-    clinicalDescription?: string;
+	@IsOptional()
+	@IsString()
+	clinicalDescription?: string;
 
-    @IsOptional()
-    @IsBoolean()
-    isChronic?: boolean = false;
+	@IsOptional()
+	@IsBoolean()
+	isChronic?: boolean = false;
 }
 
 export class MedicationInputDto {
-    @IsString()
-    @MaxLength(500)
-    medicationName!: string;
+	@IsString()
+	@MaxLength(500)
+	medicationName!: string;
 
-    @IsNumber()
-    @Min(0)
-    dosageAmount!: number;
+	@IsNumber()
+	@Min(0)
+	dosageAmount!: number;
 
-    @IsEnum(DosageUnit)
-    dosageUnit!: DosageUnit;
+	@IsEnum(DosageUnit)
+	dosageUnit!: DosageUnit;
 
-    @IsEnum(MedicationForm)
-    form!: MedicationForm;
+	@IsEnum(MedicationForm)
+	form!: MedicationForm;
 
-    @IsString()
-    @MaxLength(500)
-    frequency!: string;
+	@IsString()
+	@MaxLength(500)
+	frequency!: string;
 
-    @IsDateString()
-    startDate!: string;
+	@IsDateString()
+	startDate!: string;
 
-    @IsOptional()
-    @IsDateString()
-    endDate?: string;
+	@IsOptional()
+	@IsDateString()
+	endDate?: string;
 
-    @IsOptional()
-    @IsString()
-    instructions?: string;
+	@IsOptional()
+	@IsString()
+	instructions?: string;
 
-    @IsOptional()
-    @IsInt()
-    @Min(0)
-    diagnosisIndex?: number;
+	@IsOptional()
+	@IsInt()
+	@Min(0)
+	diagnosisIndex?: number;
 }
 
 export class LabOrderInputDto {
-    @IsInt()
-    testTypeId!: number;
+	@IsInt()
+	testTypeId!: number;
 
-    @IsOptional()
-    @IsInt()
-    specimenTypeId?: number;
+	@IsOptional()
+	@IsInt()
+	specimenTypeId?: number;
 
-    @IsEnum(OrderPriority)
-    priority!: OrderPriority;
+	@IsEnum(OrderPriority)
+	priority!: OrderPriority;
 
-    @IsOptional()
-    @IsBoolean()
-    fastingRequired?: boolean = false;
+	@IsOptional()
+	@IsBoolean()
+	fastingRequired?: boolean = false;
 
-    @IsOptional()
-    @IsString()
-    clinicalIndication?: string;
+	@IsOptional()
+	@IsString()
+	clinicalIndication?: string;
 }
 
 export class ImagingOrderInputDto {
-    @IsInt()
-    imagingTypeId!: number;
+	@IsInt()
+	imagingTypeId!: number;
 
-    @IsInt()
-    bodyPartId!: number;
+	@IsInt()
+	bodyPartId!: number;
 
-    @IsEnum(OrderPriority)
-    priority!: OrderPriority;
+	@IsEnum(OrderPriority)
+	priority!: OrderPriority;
 
-    @IsOptional()
-    @IsBoolean()
-    contrastUsed?: boolean = false;
+	@IsOptional()
+	@IsBoolean()
+	contrastUsed?: boolean = false;
 
-    @IsOptional()
-    @IsString()
-    clinicalIndication?: string;
+	@IsOptional()
+	@IsString()
+	clinicalIndication?: string;
 }
 
 export class AllergyInputDto {
-    @IsString()
-    @MaxLength(500)
-    allergenName!: string;
+	@IsString()
+	@MaxLength(500)
+	allergenName!: string;
 
-    @IsEnum(AllergySeverity)
-    severity!: AllergySeverity;
+	@IsEnum(AllergySeverity)
+	severity!: AllergySeverity;
 
-    @IsOptional()
-    @IsString()
-    reactionDescription?: string;
+	@IsOptional()
+	@IsString()
+	reactionDescription?: string;
 }
 
 export class CreateEncounterDto {
-    @IsOptional()
-    @IsString()
-    locationAddress?: string;
+	@IsOptional()
+	@IsString()
+	locationAddress?: string;
 
-    @IsArray()
-    @ArrayMinSize(1)
-    @ValidateNested({ each: true })
-    @Type(() => SymptomInputDto)
-    symptoms!: SymptomInputDto[];
+	@IsArray()
+	@ArrayMinSize(1)
+	@ValidateNested({ each: true })
+	@Type(() => SymptomInputDto)
+	symptoms!: SymptomInputDto[];
 
-    @IsArray()
-    @ArrayMinSize(1)
-    @ValidateNested({ each: true })
-    @Type(() => DiagnosisInputDto)
-    diagnoses!: DiagnosisInputDto[];
+	@IsArray()
+	@ArrayMinSize(1)
+	@ValidateNested({ each: true })
+	@Type(() => DiagnosisInputDto)
+	diagnoses!: DiagnosisInputDto[];
 
-    @IsOptional()
-    @IsArray()
-    @ValidateNested({ each: true })
-    @Type(() => MedicationInputDto)
-    medications?: MedicationInputDto[];
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => MedicationInputDto)
+	medications?: MedicationInputDto[];
 
-    @IsOptional()
-    @IsArray()
-    @ValidateNested({ each: true })
-    @Type(() => LabOrderInputDto)
-    labOrders?: LabOrderInputDto[];
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => LabOrderInputDto)
+	labOrders?: LabOrderInputDto[];
 
-    @IsOptional()
-    @IsArray()
-    @ValidateNested({ each: true })
-    @Type(() => ImagingOrderInputDto)
-    imagingOrders?: ImagingOrderInputDto[];
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => ImagingOrderInputDto)
+	imagingOrders?: ImagingOrderInputDto[];
 
-    @IsOptional()
-    @IsArray()
-    @ValidateNested({ each: true })
-    @Type(() => AllergyInputDto)
-    allergies?: AllergyInputDto[];
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => AllergyInputDto)
+	allergies?: AllergyInputDto[];
 
-    @IsOptional()
-    @IsDateString()
-    nextAppointmentDate?: string;
+	@IsOptional()
+	@IsDateString()
+	nextAppointmentDate?: string;
 
-    @IsOptional()
-    @IsString()
-    appointmentNotes?: string;
+	@IsOptional()
+	@IsString()
+	appointmentNotes?: string;
 }

@@ -1,40 +1,39 @@
 {
-  "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "resolvePackageJsonExports": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
-    "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "baseUrl": "./",
-    "ignoreDeprecations": "6.0",
-    "paths": {
-      "@db/*": ["src/modules/database/*"],
-      "@email/*": ["src/modules/email/*"],
-      "@modules/*": ["src/modules/*"],
-      "@guards/*": ["src/modules/auth/guards/*"],
-      "@helpers/*": ["src/common/helpers/*"],
-      "@common/*": ["src/common/*"],
-      "@uploads": ["uploads"]
-    },
-    "incremental": true,
-    "skipLibCheck": true,
-    "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false,
-  },
-  "include": ["src/**/*"],
-  "ts-node": {
-    "require": ["tsconfig-paths/register"]
-  }
+	"compilerOptions": {
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"resolvePackageJsonExports": true,
+		"esModuleInterop": true,
+		"isolatedModules": true,
+		"declaration": true,
+		"removeComments": true,
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
+		"allowSyntheticDefaultImports": true,
+		"target": "ES2023",
+		"sourceMap": true,
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"baseUrl": "./",
+		"paths": {
+			"@db/*": ["src/modules/database/*"],
+			"@email/*": ["src/modules/email/*"],
+			"@modules/*": ["src/modules/*"],
+			"@guards/*": ["src/modules/auth/guards/*"],
+			"@helpers/*": ["src/common/helpers/*"],
+			"@common/*": ["src/common/*"],
+			"@uploads": ["uploads"]
+		},
+		"incremental": true,
+		"skipLibCheck": true,
+		"strictNullChecks": true,
+		"forceConsistentCasingInFileNames": true,
+		"noImplicitAny": false,
+		"strictBindCallApply": false,
+		"noFallthroughCasesInSwitch": false
+	},
+	"include": ["src/**/*"],
+	"ts-node": {
+		"require": ["tsconfig-paths/register"]
+	}
 }

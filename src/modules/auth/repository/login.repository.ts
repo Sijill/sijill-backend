@@ -362,7 +362,7 @@ export class LoginRepository {
 					role: data.sessionData.role,
 				},
 				process.env.JWT_ACCESS_SECRET as string,
-				{ expiresIn: '15m' },
+				{ expiresIn: '60m' },
 			);
 
 			const refreshToken = crypto.randomBytes(32).toString('hex');

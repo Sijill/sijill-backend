@@ -88,17 +88,17 @@ export enum MedicationForm {
 }
 
 export enum DosageUnit {
-    MG = 'MG',
-    MCG = 'MCG',
-    G = 'G',
-    ML = 'ML',
-    IU = 'IU',
-    UNITS = 'UNITS',
-    DROPS = 'DROPS',
-    PUFFS = 'PUFFS',
-    TABLETS = 'TABLETS',
-    CAPSULES = 'CAPSULES',
-    TEASPOONS = 'TEASPOONS',
+	MG = 'MG',
+	MCG = 'MCG',
+	G = 'G',
+	ML = 'ML',
+	IU = 'IU',
+	UNITS = 'UNITS',
+	DROPS = 'DROPS',
+	PUFFS = 'PUFFS',
+	TABLETS = 'TABLETS',
+	CAPSULES = 'CAPSULES',
+	TEASPOONS = 'TEASPOONS',
 }
 
 export enum PatientOutcome {
@@ -121,9 +121,9 @@ export enum OrderStatus {
 }
 
 export enum OrderPriority {
-    ROUTINE = 'ROUTINE',
-    URGENT = 'URGENT',
-    STAT = 'STAT',
+	ROUTINE = 'ROUTINE',
+	URGENT = 'URGENT',
+	STAT = 'STAT',
 }
 
 // MISC
