@@ -8,6 +8,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AdminModule } from '@modules/admin/admin.module';
 import { ClinicalModule } from '@modules/clinical/clinical.module';
+import { IcdModule } from '@modules/icd11/icd.module';
 
 @Module({
 	imports: [
@@ -52,6 +53,7 @@ import { ClinicalModule } from '@modules/clinical/clinical.module';
 		AuthModule,
 		AdminModule,
 		ClinicalModule,
+		IcdModule,
 	],
 	exports: [],
 	controllers: [],

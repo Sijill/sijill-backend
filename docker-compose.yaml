@@ -30,6 +30,28 @@ services:
     networks:
       - sijill-network
 
+  icd-api:
+    image: whoicd/icd-api
+    container_name: sijill-icd-api
+    environment:
+      acceptLicense: "true"
+      saveAnalytics: "false"
+    ports:
+      - "8081:80"
+    networks:
+      - sijill-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider --header='API-Version: v2' --header='Accept-Language: en' 'http://127.0.0.1/icd/release/11/2026-01/mms/search?q=asthma&highlightingEnabled=false&medicalCodingMode=true'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -51,6 +73,7 @@ services:
       SMTP_PORT: 1025
       SMTP_FROM_EMAIL: sijill@email.gov
       SMTP_FROM_NAME: Sijill
+      ICD_API_URL: http://icd-api
       
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
 
@@ -61,6 +84,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      icd-api:
+        condition: service_healthy
     networks:
       - sijill-network
     restart: unless-stopped
