@@ -240,9 +240,6 @@ CREATE TABLE patient_health_notes (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-CREATE UNIQUE INDEX idx_health_notes_patient_date
-ON patient_health_notes(patient_id, note_date);
-
 CREATE TABLE medications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     encounter_id UUID REFERENCES clinical_encounters(id),
