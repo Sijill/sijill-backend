@@ -226,18 +226,23 @@ CREATE TABLE diagnoses (
 CREATE TABLE patient_health_notes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    diagnosis_id UUID NOT NULL REFERENCES diagnoses(id) ON DELETE CASCADE,
+    diagnosis_id UUID NOT NULL,
 
-    note_date DATE NOT NULL,
+    note_date DATE NOT NULL DEFAULT now(),
     patient_outcome patient_outcome,
     patient_outcome_details TEXT,
-    mood VARCHAR(50),
+    mood TEXT,
     pain_level SMALLINT CHECK (pain_level BETWEEN 0 AND 10),
     energy_level SMALLINT CHECK (energy_level BETWEEN 0 AND 10),
 
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+
+    CONSTRAINT fk_patient_health_notes_diagnosis_patient
+    FOREIGN KEY (diagnosis_id, patient_id)
+    REFERENCES diagnoses(id, patient_id)
+    ON DELETE CASCADE
 );
 
 CREATE TABLE medications (

@@ -29,25 +29,27 @@ const ALLERGY_ID = '99999999-9999-9999-9999-999999999999';
 const CONTACT_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const PROFILE_DOCUMENT_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const LAB_ORDER_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
-const LAB_DETAIL_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 const LAB_RESULT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 const LAB_RESULT_DOCUMENT_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 const LAB_RESULT_LINK_ID = '12121212-1212-1212-1212-121212121212';
 const IMAGING_ORDER_ID = '13131313-1313-1313-1313-131313131313';
-const IMAGING_DETAIL_ID = '14141414-1414-1414-1414-141414141414';
 const IMAGING_RESULT_ID = '15151515-1515-1515-1515-151515151515';
 const IMAGING_DOCUMENT_ID = '16161616-1616-1616-1616-161616161616';
 const IMAGING_RESULT_LINK_ID = '17171717-1717-1717-1717-171717171717';
+const PENDING_IMAGING_ORDER_ID = '18181818-1818-1818-1818-181818181818';
+const PREVIOUS_JOURNAL_NOTE_ID = '19191919-1919-1919-1919-191919191919';
 
 describe('ClinicalModule (e2e)', () => {
 	let app: INestApplication;
 	let db: DatabaseService;
 	let databaseName: string;
+	let originalFetch: typeof fetch | undefined;
 	let patientJwt: string;
 	let hcpJwt: string;
 	let tokenId: string;
 	let sessionId: string;
 	let clinicalSessionToken: string;
+	let createdEncounterId: string;
 
 	beforeAll(async () => {
 		databaseName = await createClinicalTestDatabase({
@@ -65,10 +67,13 @@ describe('ClinicalModule (e2e)', () => {
 		process.env.DB_USER = TEST_DB_USER;
 		process.env.DB_PASSWORD = TEST_DB_PASSWORD;
 		process.env.JWT_ACCESS_SECRET = TEST_ACCESS_SECRET;
+		process.env.GEMINI_API_KEY = 'clinical-test-gemini-key';
+		process.env.GEMINI_MODEL = 'gemini-2.5-flash';
 		process.env.SMTP_HOST = 'localhost';
 		process.env.SMTP_PORT = '1025';
 		process.env.SMTP_FROM_EMAIL = 'test@sijill.local';
 		process.env.SMTP_FROM_NAME = 'Sijill Test';
+		originalFetch = global.fetch;
 
 		const moduleRef = await Test.createTestingModule({
 			imports: [AppModule],
@@ -96,6 +101,8 @@ describe('ClinicalModule (e2e)', () => {
 	});
 
 	afterAll(async () => {
+		global.fetch = originalFetch as typeof fetch;
+
 		if (app) {
 			await app.close();
 		}
@@ -136,6 +143,178 @@ describe('ClinicalModule (e2e)', () => {
 		});
 		expect(imagingTypes.rows[0].total).toBeGreaterThan(0);
 		expect(testTypes.rows[0].total).toBeGreaterThan(0);
+	});
+
+	it('returns the patient medical identity for the mobile app endpoint', async () => {
+		const response = await request(app.getHttpServer())
+			.get('/api/v1/patient/medical-identity')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(response.body.basicInfo).toMatchObject({
+			age: expect.any(Number),
+			gender: 'FEMALE',
+			bloodType: null,
+			weightKg: null,
+			heightCm: null,
+			bmi: null,
+		});
+		expect(response.body.activeDiagnoses).toHaveLength(2);
+		expect(response.body.currentMedications).toEqual([
+			expect.objectContaining({
+				medicationName: 'Salbutamol',
+				dosageAmount: 100,
+				dosageUnit: 'MCG',
+				form: 'INHALER',
+				prescribedBy: 'Khaled Mostafa Ali',
+			}),
+		]);
+		expect(response.body.allergies).toEqual([
+			expect.objectContaining({
+				allergenName: 'Penicillin',
+				icd11Title: 'Penicillin',
+				severity: 'SEVERE',
+				reactionDescription: 'Anaphylactic reaction',
+				diagnosedBy: 'Khaled Mostafa Ali',
+			}),
+		]);
+		expect(response.body.chronicConditions).toHaveLength(1);
+		expect(response.body.emergencyContacts).toEqual([
+			expect.objectContaining({
+				contactName: 'Ahmed Jenkins',
+				relationship: 'SPOUSE',
+				phoneNumber: '+201012345678',
+				isPrimary: true,
+			}),
+		]);
+	});
+
+	it('lists active diagnoses for the health journal with diagnosis ids', async () => {
+		const response = await request(app.getHttpServer())
+			.get('/api/v1/patient/health-journal/diagnoses')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(response.body.diagnoses).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					diagnosisId: ACUTE_DIAGNOSIS_ID,
+					icd11Code: 'CA23',
+					icd11Title: 'Asthma',
+					isChronic: false,
+				}),
+				expect.objectContaining({
+					diagnosisId: CHRONIC_DIAGNOSIS_ID,
+					icd11Code: '5A11',
+					icd11Title: 'Type 2 diabetes mellitus',
+					isChronic: true,
+				}),
+			]),
+		);
+	});
+
+	it('creates a health journal note and returns an AI health snapshot', async () => {
+		const fetchMock = jest.fn().mockResolvedValue({
+			ok: true,
+			json: jest.fn().mockResolvedValue({
+				candidates: [
+					{
+						content: {
+							parts: [
+								{
+									text: JSON.stringify({
+										urgencyLevel: 'MEDIUM',
+										summary:
+											'Your note suggests a symptom flare that should be watched closely.',
+										advice: [
+											'Follow the asthma care plan your clinician already gave you.',
+											'Keep activity light today and monitor whether the pain and fatigue settle.',
+										],
+										watchouts: [
+											'Rising pain or breathing discomfort would be a reason to contact your clinician sooner.',
+										],
+										whenToContactDoctor: [
+											'Reach out if symptoms keep getting worse over the next day.',
+										],
+										disclaimer:
+											'This guidance supports but does not replace medical care.',
+									}),
+								},
+							],
+						},
+					},
+				],
+			}),
+		});
+		global.fetch = fetchMock as typeof fetch;
+
+		const response = await request(app.getHttpServer())
+			.post('/api/v1/patient/health-journal/notes')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({
+				diagnosisId: ACUTE_DIAGNOSIS_ID,
+				patientOutcome: 'WORSE',
+				patientOutcomeDetails: 'Cough felt tighter after climbing stairs today.',
+				painLevel: 7,
+				energyLevel: 3,
+				mood: 'More tired today after walking and a little anxious.',
+			})
+			.expect(201);
+
+		expect(response.body.entry).toMatchObject({
+			diagnosisId: ACUTE_DIAGNOSIS_ID,
+			patientOutcome: 'WORSE',
+			patientOutcomeDetails:
+				'Cough felt tighter after climbing stairs today.',
+			painLevel: 7,
+			energyLevel: 3,
+			mood: 'More tired today after walking and a little anxious.',
+			diagnosis: {
+				icd11Title: 'Asthma',
+			},
+		});
+		expect(response.body.healthSnapshot).toMatchObject({
+			status: 'READY',
+			model: 'gemini-2.5-flash',
+			urgencyLevel: 'MEDIUM',
+		});
+		expect(response.body.healthSnapshot.advice).toHaveLength(2);
+
+		const storedNotes = await db.query(
+			`
+				SELECT
+					COUNT(*)::INT AS total,
+					MAX(mood) AS latest_mood
+				FROM patient_health_notes
+				WHERE patient_id = $1
+			`,
+			[PATIENT_ID],
+		);
+
+		expect(storedNotes.rows[0]).toMatchObject({
+			total: 2,
+			latest_mood:
+				'More tired today after walking and a little anxious.',
+		});
+
+		const geminiRequest = fetchMock.mock.calls[0]?.[1];
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock.mock.calls[0][0]).toContain(
+			'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+		);
+		expect(geminiRequest.headers).toMatchObject({
+			'Content-Type': 'application/json',
+		});
+
+		const geminiPayload = JSON.parse(geminiRequest.body as string);
+		const prompt = geminiPayload.contents[0].parts[0].text as string;
+
+		expect(prompt).toContain('Penicillin');
+		expect(prompt).toContain('Persistent cough follow-up');
+		expect(prompt).toContain('Slept a little better last night');
+		expect(prompt).toContain(
+			'More tired today after walking and a little anxious.',
+		);
 	});
 
 	it('generates a patient permission token and lists it as active', async () => {
@@ -338,7 +517,7 @@ describe('ClinicalModule (e2e)', () => {
 		).toHaveLength(1);
 	});
 
-	it('creates a new encounter atomically and records notifications', async () => {
+	it('creates a multi-item encounter, stores all linked records correctly, and exposes them through identity/history', async () => {
 		const createResponse = await request(app.getHttpServer())
 			.post(`/api/v1/clinical/sessions/${sessionId}/encounters`)
 			.set('Authorization', `Bearer ${clinicalSessionToken}`)
@@ -349,6 +528,10 @@ describe('ClinicalModule (e2e)', () => {
 						title: 'Shortness of breath',
 						description: 'Worse after climbing stairs',
 					},
+					{
+						title: 'Chest tightness',
+						description: 'Mostly in the evening',
+					},
 				],
 				diagnoses: [
 					{
@@ -356,6 +539,12 @@ describe('ClinicalModule (e2e)', () => {
 						icd11Title: 'Bronchitis',
 						clinicalDescription: 'Acute bronchitis after viral infection',
 						isChronic: false,
+					},
+					{
+						icd11Code: 'BA00',
+						icd11Title: 'Hypertension',
+						clinicalDescription: 'Elevated blood pressure requiring follow-up',
+						isChronic: true,
 					},
 				],
 				medications: [
@@ -366,9 +555,19 @@ describe('ClinicalModule (e2e)', () => {
 						form: 'TABLET',
 						frequency: 'After breakfast once daily for 5 days',
 						startDate: '2026-04-18',
-						endDate: '2026-04-22',
+						endDate: '2026-05-02',
 						instructions: 'Take after food',
 						diagnosisIndex: 0,
+					},
+					{
+						medicationName: 'Amlodipine',
+						dosageAmount: 5,
+						dosageUnit: 'MG',
+						form: 'TABLET',
+						frequency: 'Once daily at night',
+						startDate: '2026-04-18',
+						instructions: 'Monitor blood pressure twice weekly',
+						diagnosisIndex: 1,
 					},
 				],
 				labOrders: [
@@ -379,6 +578,13 @@ describe('ClinicalModule (e2e)', () => {
 						fastingRequired: false,
 						clinicalIndication: 'Check CBC after fatigue',
 					},
+					{
+						testTypeId: 2,
+						specimenTypeId: 1,
+						priority: 'URGENT',
+						fastingRequired: true,
+						clinicalIndication: 'Assess metabolic status after elevated BP',
+					},
 				],
 				imagingOrders: [
 					{
@@ -388,12 +594,24 @@ describe('ClinicalModule (e2e)', () => {
 						contrastUsed: false,
 						clinicalIndication: 'Evaluate chest pain',
 					},
+					{
+						imagingTypeId: 1,
+						bodyPartId: 1,
+						priority: 'ROUTINE',
+						contrastUsed: false,
+						clinicalIndication: 'Investigate persistent headaches',
+					},
 				],
 				allergies: [
 					{
 						allergenName: 'Dust',
 						severity: 'MILD',
 						reactionDescription: 'Sneezing and watery eyes',
+					},
+					{
+						allergenName: 'Ibuprofen',
+						severity: 'MODERATE',
+						reactionDescription: 'Facial rash',
 					},
 				],
 				nextAppointmentDate: '2026-05-01T09:00:00.000Z',
@@ -404,17 +622,66 @@ describe('ClinicalModule (e2e)', () => {
 		expect(createResponse.body).toMatchObject({
 			success: true,
 			message: 'Encounter recorded successfully',
-			notificationsCreated: 4,
+			notificationsCreated: 7,
 		});
 		expect(createResponse.body.encounterId).toMatch(/^[0-9a-f-]{36}$/i);
+		createdEncounterId = createResponse.body.encounterId;
 
-		const encounterQuery = await db.query(
+		const encounterMetaQuery = await db.query(
 			`
-				SELECT COUNT(*)::INT AS total
+				SELECT
+					patient_id,
+					hcp_id,
+					location_address,
+					next_appointment_date,
+					appointment_notes
 				FROM clinical_encounters
+				WHERE id = $1
+			`,
+			[createdEncounterId],
+		);
+		const diagnosesQuery = await db.query(
+			`
+				SELECT icd11_code, icd11_title, is_chronic, status
+				FROM diagnoses
+				WHERE encounter_id = $1
+				ORDER BY created_at ASC
+			`,
+			[createdEncounterId],
+		);
+		const medicationsQuery = await db.query(
+			`
+				SELECT
+					m.medication_name,
+					d.icd11_code,
+					m.prescribed_by_hcp_id,
+					m.start_date,
+					m.end_date
+				FROM medications m
+				LEFT JOIN diagnoses d ON d.id = m.diagnosis_id
+				WHERE m.encounter_id = $1
+				ORDER BY m.created_at ASC
+			`,
+			[createdEncounterId],
+		);
+		const allergiesQuery = await db.query(
+			`
+				SELECT allergen_name, severity, diagnosed_by
+				FROM patient_allergies
 				WHERE patient_id = $1
+					AND allergen_name IN ('Dust', 'Ibuprofen')
+				ORDER BY allergen_name ASC
 			`,
 			[PATIENT_ID],
+		);
+		const ordersQuery = await db.query(
+			`
+				SELECT order_type, COUNT(*)::INT AS total
+				FROM medical_orders
+				WHERE encounter_id = $1
+				GROUP BY order_type
+			`,
+			[createdEncounterId],
 		);
 		const notificationQuery = await db.query(
 			`
@@ -425,8 +692,78 @@ describe('ClinicalModule (e2e)', () => {
 			`,
 			[PATIENT_USER_ID],
 		);
+		const identityResponse = await request(app.getHttpServer())
+			.get(`/api/v1/clinical/sessions/${sessionId}/medical-identity`)
+			.set('Authorization', `Bearer ${clinicalSessionToken}`)
+			.expect(200);
+		const historyResponse = await request(app.getHttpServer())
+			.get(`/api/v1/clinical/sessions/${sessionId}/medical-history`)
+			.set('Authorization', `Bearer ${clinicalSessionToken}`)
+			.query({ page: 1, limit: 10 })
+			.expect(200);
+		const detailResponse = await request(app.getHttpServer())
+			.get(
+				`/api/v1/clinical/sessions/${sessionId}/medical-history/${createdEncounterId}`,
+			)
+			.set('Authorization', `Bearer ${clinicalSessionToken}`)
+			.expect(200);
 
-		expect(encounterQuery.rows[0].total).toBe(2);
+		expect(encounterMetaQuery.rows[0]).toMatchObject({
+			patient_id: PATIENT_ID,
+			hcp_id: HCP_ID,
+			location_address: 'Cairo Medical Center, 99 Tahrir St, Cairo',
+			appointment_notes: 'Review response to antibiotics',
+		});
+		expect(diagnosesQuery.rows).toEqual([
+			expect.objectContaining({
+				icd11_code: 'BD11',
+				icd11_title: 'Bronchitis',
+				is_chronic: false,
+				status: 'ACTIVE',
+			}),
+			expect.objectContaining({
+				icd11_code: 'BA00',
+				icd11_title: 'Hypertension',
+				is_chronic: true,
+				status: 'ACTIVE',
+			}),
+		]);
+		expect(medicationsQuery.rows).toEqual([
+			expect.objectContaining({
+				medication_name: 'Azithromycin',
+				icd11_code: 'BD11',
+				prescribed_by_hcp_id: HCP_ID,
+			}),
+			expect.objectContaining({
+				medication_name: 'Amlodipine',
+				icd11_code: 'BA00',
+				prescribed_by_hcp_id: HCP_ID,
+			}),
+		]);
+		expect(allergiesQuery.rows).toEqual([
+			expect.objectContaining({
+				allergen_name: 'Dust',
+				severity: 'MILD',
+				diagnosed_by: HCP_ID,
+			}),
+			expect.objectContaining({
+				allergen_name: 'Ibuprofen',
+				severity: 'MODERATE',
+				diagnosed_by: HCP_ID,
+			}),
+		]);
+		expect(ordersQuery.rows).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					order_type: 'IMAGING',
+					total: 2,
+				}),
+				expect.objectContaining({
+					order_type: 'LABORATORY',
+					total: 2,
+				}),
+			]),
+		);
 		expect(notificationQuery.rows).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -435,14 +772,137 @@ describe('ClinicalModule (e2e)', () => {
 				}),
 				expect.objectContaining({
 					notification_type: 'MEDICATION_REMINDER',
-					total: 1,
+					total: 2,
 				}),
 				expect.objectContaining({
 					notification_type: 'MEDICAL_ORDER',
-					total: 2,
+					total: 4,
 				}),
 			]),
 		);
+		expect(identityResponse.body.activeDiagnoses).toHaveLength(4);
+		expect(identityResponse.body.currentMedications).toHaveLength(3);
+		expect(identityResponse.body.allergies).toHaveLength(3);
+		expect(identityResponse.body.chronicConditions).toHaveLength(2);
+		expect(historyResponse.body.data).toHaveLength(2);
+		expect(historyResponse.body.data[0]).toMatchObject({
+			encounterId: createdEncounterId,
+			primaryDiagnosis: {
+				icd11Code: 'BD11',
+				icd11Title: 'Bronchitis',
+			},
+		});
+		expect(detailResponse.body).toMatchObject({
+			encounterId: createdEncounterId,
+			hcpFullName: 'Khaled Mostafa Ali',
+			hcpSpecialization: 'Pulmonology',
+			locationAddress: 'Cairo Medical Center, 99 Tahrir St, Cairo',
+			nextAppointmentDate: '2026-05-01T09:00:00.000Z',
+			appointmentNotes: 'Review response to antibiotics',
+		});
+		expect(detailResponse.body.symptoms).toHaveLength(2);
+		expect(detailResponse.body.diagnoses).toHaveLength(2);
+		expect(detailResponse.body.medications).toHaveLength(2);
+		expect(detailResponse.body.orders).toHaveLength(4);
+	});
+
+	it('rejects invalid diagnosis references and rolls the encounter transaction back', async () => {
+		const beforeCounts = await db.query(
+			`
+				SELECT
+					(SELECT COUNT(*)::INT FROM clinical_encounters WHERE patient_id = $1) AS encounters,
+					(SELECT COUNT(*)::INT FROM diagnoses WHERE patient_id = $1) AS diagnoses
+			`,
+			[PATIENT_ID],
+		);
+
+		const failedResponse = await request(app.getHttpServer())
+			.post(`/api/v1/clinical/sessions/${sessionId}/encounters`)
+			.set('Authorization', `Bearer ${clinicalSessionToken}`)
+			.send({
+				locationAddress: 'Rollback Clinic',
+				symptoms: [{ title: 'Dizziness' }],
+				diagnoses: [
+					{
+						icd11Code: '1A00',
+						icd11Title: 'Test diagnosis',
+					},
+				],
+				medications: [
+					{
+						medicationName: 'Test medication',
+						dosageAmount: 1,
+						dosageUnit: 'TABLETS',
+						form: 'TABLET',
+						frequency: 'Once daily',
+						startDate: '2026-04-18',
+						diagnosisIndex: 3,
+					},
+				],
+			})
+			.expect(400);
+
+		expect(failedResponse.body.message).toContain(
+			'medications.diagnosisIndex 3 does not reference a valid diagnosis.',
+		);
+
+		const afterCounts = await db.query(
+			`
+				SELECT
+					(SELECT COUNT(*)::INT FROM clinical_encounters WHERE patient_id = $1) AS encounters,
+					(SELECT COUNT(*)::INT FROM diagnoses WHERE patient_id = $1) AS diagnoses
+			`,
+			[PATIENT_ID],
+		);
+
+		expect(afterCounts.rows[0]).toEqual(beforeCounts.rows[0]);
+	});
+
+	it('blocks write operations for read-only clinical sessions while keeping read access intact', async () => {
+		const tokenResponse = await request(app.getHttpServer())
+			.post('/api/v1/clinical/permission-tokens')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({
+				entityType: 'HEALTHCARE_PROVIDER',
+				accessType: 'READ_ONLY',
+				expiresInMinutes: 30,
+			})
+			.expect(201);
+
+		const readOnlySessionResponse = await request(app.getHttpServer())
+			.post('/api/v1/clinical/sessions')
+			.set('Authorization', `Bearer ${hcpJwt}`)
+			.send({ code: tokenResponse.body.code })
+			.expect(201);
+
+		const readOnlySessionId = readOnlySessionResponse.body.sessionId;
+		const readOnlyToken = readOnlySessionResponse.body.clinicalSessionToken;
+
+		await request(app.getHttpServer())
+			.get(`/api/v1/clinical/sessions/${readOnlySessionId}/medical-history`)
+			.set('Authorization', `Bearer ${readOnlyToken}`)
+			.query({ page: 1, limit: 10 })
+			.expect(200);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/clinical/sessions/${readOnlySessionId}/medical-identity`)
+			.set('Authorization', `Bearer ${readOnlyToken}`)
+			.send({ weightKg: 71 })
+			.expect(403);
+
+		await request(app.getHttpServer())
+			.post(`/api/v1/clinical/sessions/${readOnlySessionId}/encounters`)
+			.set('Authorization', `Bearer ${readOnlyToken}`)
+			.send({
+				symptoms: [{ title: 'Should not save' }],
+				diagnoses: [
+					{
+						icd11Code: '1A00',
+						icd11Title: 'Should not save',
+					},
+				],
+			})
+			.expect(403);
 	});
 
 	it('revokes the permission token and blocks further clinical-session access', async () => {
@@ -729,6 +1189,39 @@ async function seedClinicalTestData(db: DatabaseService) {
 
 	await db.query(
 		`
+			INSERT INTO patient_health_notes
+				(
+					id,
+					patient_id,
+					diagnosis_id,
+					note_date,
+					patient_outcome,
+					patient_outcome_details,
+					mood,
+					pain_level,
+					energy_level,
+					created_at,
+					updated_at
+				)
+			VALUES (
+				$1,
+				$2,
+				$3,
+				'2026-03-15',
+				'IMPROVED',
+				'Slept a little better last night.',
+				'Calmer than last week.',
+				3,
+				6,
+				'2026-03-15T19:00:00.000Z',
+				'2026-03-15T19:00:00.000Z'
+			)
+		`,
+		[PREVIOUS_JOURNAL_NOTE_ID, PATIENT_ID, ACUTE_DIAGNOSIS_ID],
+	);
+
+	await db.query(
+		`
 			INSERT INTO medical_orders
 				(id, encounter_id, patient_id, ordered_by_hcp_id, order_type, order_status, ordered_at, updated_at)
 			VALUES
@@ -740,11 +1233,20 @@ async function seedClinicalTestData(db: DatabaseService) {
 
 	await db.query(
 		`
+			INSERT INTO medical_orders
+				(id, encounter_id, patient_id, ordered_by_hcp_id, order_type, order_status, ordered_at, updated_at)
+			VALUES
+				($1, NULL, $2, $3, 'IMAGING', 'PENDING', '2026-04-02T09:00:00.000Z', NOW())
+		`,
+		[PENDING_IMAGING_ORDER_ID, PATIENT_ID, HCP_ID],
+	);
+
+	await db.query(
+		`
 			INSERT INTO lab_orders
-				(id, medical_order_id, test_type_id, specimen_type_id, fasting_required, priority, clinical_indication)
+				(medical_order_id, test_type_id, specimen_type_id, fasting_required, priority, clinical_indication)
 			VALUES (
 				$1,
-				$2,
 				1,
 				1,
 				FALSE,
@@ -752,7 +1254,7 @@ async function seedClinicalTestData(db: DatabaseService) {
 				'Rule out anaemia'
 			)
 		`,
-		[LAB_DETAIL_ID, LAB_ORDER_ID],
+		[LAB_ORDER_ID],
 	);
 
 	await db.query(
@@ -785,10 +1287,9 @@ async function seedClinicalTestData(db: DatabaseService) {
 	await db.query(
 		`
 			INSERT INTO imaging_orders
-				(id, medical_order_id, imaging_type_id, body_part_id, contrast_used, priority, clinical_indication)
+				(medical_order_id, imaging_type_id, body_part_id, contrast_used, priority, clinical_indication)
 			VALUES (
 				$1,
-				$2,
 				3,
 				3,
 				FALSE,
@@ -796,7 +1297,23 @@ async function seedClinicalTestData(db: DatabaseService) {
 				'Evaluate lung hyperinflation'
 			)
 		`,
-		[IMAGING_DETAIL_ID, IMAGING_ORDER_ID],
+		[IMAGING_ORDER_ID],
+	);
+
+	await db.query(
+		`
+			INSERT INTO imaging_orders
+				(medical_order_id, imaging_type_id, body_part_id, contrast_used, priority, clinical_indication)
+			VALUES (
+				$1,
+				1,
+				3,
+				FALSE,
+				'URGENT',
+				'Persistent cough follow-up'
+			)
+		`,
+		[PENDING_IMAGING_ORDER_ID],
 	);
 
 	await db.query(

@@ -9,15 +9,14 @@ import * as path from 'path';
 
 (async function bootstrap() {
 	const app = await NestFactory.create(AppModule);
+	const uploadRoot = process.env.UPLOAD_ROOT
+		? path.resolve(process.env.UPLOAD_ROOT)
+		: path.join(process.cwd(), 'uploads');
 
-	const uploadDirs = [
-		'uploads/identity',
-		'uploads/clinical',
-		'uploads/workplace',
-	];
+	const uploadDirs = ['identity', 'clinical', 'workplace'];
 
 	uploadDirs.forEach((dir) => {
-		const fullPath = path.join(process.cwd(), dir);
+		const fullPath = path.join(uploadRoot, dir);
 		if (!fs.existsSync(fullPath)) {
 			fs.mkdirSync(fullPath, { recursive: true });
 		}

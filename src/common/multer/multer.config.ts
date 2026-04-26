@@ -7,59 +7,59 @@ import * as path from 'path';
 const fieldsMap = new Map();
 fieldsMap.set(
 	'profilePicture',
-	path.resolve(process.cwd(), 'uploads', 'identity'),
+	'identity',
 );
 fieldsMap.set(
 	'nationalIdFront',
-	path.resolve(process.cwd(), 'uploads', 'identity'),
+	'identity',
 );
 fieldsMap.set(
 	'nationalIdBack',
-	path.resolve(process.cwd(), 'uploads', 'identity'),
+	'identity',
 );
 fieldsMap.set(
 	'selfieWithId',
-	path.resolve(process.cwd(), 'uploads', 'identity'),
+	'identity',
 );
 fieldsMap.set(
 	'medicalLicenseDocument',
-	path.resolve(process.cwd(), 'uploads', 'identity'),
+	'identity',
 );
 
 fieldsMap.set(
 	'workplaceLogo',
-	path.resolve(process.cwd(), 'uploads', 'workplace'),
+	'workplace',
 );
-fieldsMap.set('labLogo', path.resolve(process.cwd(), 'uploads', 'workplace'));
+fieldsMap.set('labLogo', 'workplace');
 fieldsMap.set(
 	'centerLogo',
-	path.resolve(process.cwd(), 'uploads', 'workplace'),
+	'workplace',
 );
 fieldsMap.set(
 	'workplaceDocument',
-	path.resolve(process.cwd(), 'uploads', 'workplace'),
+	'workplace',
 );
 fieldsMap.set(
 	'accreditationDocument',
-	path.resolve(process.cwd(), 'uploads', 'workplace'),
+	'workplace',
 );
 fieldsMap.set(
 	'proofOfAddress',
-	path.resolve(process.cwd(), 'uploads', 'workplace'),
+	'workplace',
 );
 
 fieldsMap.set(
 	'prescription',
-	path.resolve(process.cwd(), 'uploads', 'clinical'),
+	'clinical',
 );
-fieldsMap.set('labResult', path.resolve(process.cwd(), 'uploads', 'clinical'));
+fieldsMap.set('labResult', 'clinical');
 fieldsMap.set(
 	'imagingResult',
-	path.resolve(process.cwd(), 'uploads', 'clinical'),
+	'clinical',
 );
 fieldsMap.set(
 	'clinicalAttachment',
-	path.resolve(process.cwd(), 'uploads', 'clinical'),
+	'clinical',
 );
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -74,7 +74,11 @@ const ALLOWED_MIME_TYPES = new Set([
 export const multerStorage = diskStorage({
 	destination: (req, file, cb) => {
 		const fieldName: string = file.fieldname;
-		const filePath: string = fieldsMap.get(fieldName);
+		const uploadSubdir: string = fieldsMap.get(fieldName);
+		const uploadRoot = process.env.UPLOAD_ROOT
+			? path.resolve(process.env.UPLOAD_ROOT)
+			: path.resolve(process.cwd(), 'uploads');
+		const filePath = path.resolve(uploadRoot, uploadSubdir);
 
 		cb(null, filePath);
 	},

@@ -9,6 +9,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AdminModule } from '@modules/admin/admin.module';
 import { ClinicalModule } from '@modules/clinical/clinical.module';
 import { IcdModule } from '@modules/icd11/icd.module';
+import { PatientModule } from '@modules/patient/patient.module';
 
 @Module({
 	imports: [
@@ -54,6 +55,7 @@ import { IcdModule } from '@modules/icd11/icd.module';
 		AdminModule,
 		ClinicalModule,
 		IcdModule,
+		PatientModule,
 	],
 	exports: [],
 	controllers: [],

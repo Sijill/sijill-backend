@@ -163,9 +163,9 @@ export class AdminService {
 				mimeType: doc.mime_type,
 				fileSizeBytes: doc.file_size_bytes,
 				uploadedAt: doc.uploaded_at,
-				downloadUrl: `/api/admin/verification-queue/documents/${doc.id}`,
+				downloadUrl: `/api/v1/admin/verification-queue/documents/${doc.id}`,
 				previewUrl: doc.mime_type.startsWith('image/')
-					? `/api/admin/verification-queue/documents/${doc.id}`
+					? `/api/v1/admin/verification-queue/documents/${doc.id}`
 					: null,
 			};
 
