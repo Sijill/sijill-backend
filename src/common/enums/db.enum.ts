@@ -53,12 +53,12 @@ export enum BloodType {
 }
 
 export enum EmergencyContactRelationship {
-	PARENT = 'PARENT',
-	SPOUSE = 'SPOUSE',
-	SIBLING = 'SIBLING',
-	FRIEND = 'FRIEND',
-	CAREGIVER = 'CAREGIVER',
-	OTHER = 'OTHER',
+    PARENT = 'PARENT',
+    SPOUSE = 'SPOUSE',
+    SIBLING = 'SIBLING',
+    FRIEND = 'FRIEND',
+    CAREGIVER = 'CAREGIVER',
+    OTHER = 'OTHER',
 }
 
 // Clinical Enums

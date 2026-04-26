@@ -7,6 +7,12 @@ import { PinoLogger } from 'nestjs-pino';
 import { PatientRepository } from './patient.repository';
 import { CreateHealthJournalEntryDto } from './dto/create-health-journal-entry.dto';
 import { PatientHealthSnapshotService } from './patient-health-snapshot.service';
+import { StreamableFile } from '@nestjs/common';
+import { createReadStream } from 'fs';
+import { stat as fsStat } from 'fs/promises';
+import * as path from 'path';
+import type { Response } from 'express';
+import { AddEmergencyContactDto } from './dto/add-emergency-contact.dto';
 
 @Injectable()
 export class PatientService {
@@ -204,6 +210,81 @@ export class PatientService {
 			if (error instanceof NotFoundException) throw error;
 			this.logger.error(error);
 			throw new InternalServerErrorException('Failed to load health journal notes.');
+		}
+	}
+
+	async uploadProfilePicture(patientUserId: string, file: Express.Multer.File) {
+		try {
+			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			if (!patient) throw new NotFoundException('Patient profile not found.');
+
+			await this.patientRepository.saveProfilePicture(patient.user_id, file);
+
+			return { message: 'Profile picture uploaded successfully.' };
+		} catch (error) {
+			if (error instanceof NotFoundException) throw error;
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to upload profile picture.');
+		}
+	}
+
+	async getProfilePicture(patientUserId: string, res: Response): Promise<StreamableFile> {
+		try {
+			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			if (!patient) throw new NotFoundException('Patient profile not found.');
+
+			const document = await this.patientRepository.getLatestProfilePicture(patient.user_id);
+
+			if (!document) {
+				throw new NotFoundException('No profile picture set.');
+			}
+
+			const fullPath = path.resolve(process.cwd(), document.filePath);
+
+			try {
+				await fsStat(fullPath);
+			} catch {
+				throw new NotFoundException('Profile picture file not found on disk.');
+			}
+
+			res.set({
+				'Content-Type': document.mimeType,
+				'Content-Disposition': `inline; filename="${document.fileName}"`,
+			});
+
+			return new StreamableFile(createReadStream(fullPath));
+		} catch (error) {
+			if (error instanceof NotFoundException) throw error;
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to retrieve profile picture.');
+		}
+	}
+
+	async addEmergencyContact(patientUserId: string, dto: AddEmergencyContactDto) {
+		try {
+			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			if (!patient) throw new NotFoundException('Patient profile not found.');
+
+			const contact = await this.patientRepository.addEmergencyContact(patient.id, dto);
+			return { contact };
+		} catch (error) {
+			if (error instanceof NotFoundException) throw error;
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to add emergency contact.');
+		}
+	}
+
+	async removeEmergencyContact(patientUserId: string, contactId: string) {
+		try {
+			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			if (!patient) throw new NotFoundException('Patient profile not found.');
+
+			await this.patientRepository.removeEmergencyContact(patient.id, contactId);
+			return { message: 'Emergency contact removed.' };
+		} catch (error) {
+			if (error instanceof NotFoundException) throw error;
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to remove emergency contact.');
 		}
 	}
 }

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Param, UseGuards } from '@nestjs/common';
+import {
+    Body, Controller, Delete, Get, Post,
+    Param, UseGuards, UseInterceptors,
+    UploadedFile, Res, StreamableFile, BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { multerStorage, multerLimits, multerFileFilter } from '@common/multer/multer.config';
+import { AddEmergencyContactDto } from './dto/add-emergency-contact.dto';
+import type { Response } from 'express';
 import { AuthGuard } from '@guards/auth.guard';
 import { RoleGuard } from '@guards/role.guard';
 import { StatusGuard } from '@guards/status.guard';
@@ -47,5 +55,47 @@ export class PatientController {
 		@Param('diagnosisId') diagnosisId: string,
 	) {
 		return await this.patientService.listHealthJournalNotes(user.userId, diagnosisId);
+	}
+
+	@Post('profile-picture')
+	@UseInterceptors(FileInterceptor('profilePicture', {
+		storage: multerStorage,
+		limits: multerLimits,
+		fileFilter: multerFileFilter,
+	}))
+	async uploadProfilePicture(
+		@CurrentUser() user: CurrentUserType,
+		@UploadedFile() file: Express.Multer.File,
+	) {
+		if (!file) {
+			throw new BadRequestException('No file uploaded.');
+		}
+		return await this.patientService.uploadProfilePicture(user.userId, file);
+	}
+
+	@Get('profile-picture')
+	async getProfilePicture(
+		@CurrentUser() user: CurrentUserType,
+		@Res({ passthrough: true }) res: Response,
+	): Promise<StreamableFile> {
+		return await this.patientService.getProfilePicture(user.userId, res);
+	}
+
+	// --- emergency contacts ---
+
+	@Post('emergency-contacts')
+	async addEmergencyContact(
+		@CurrentUser() user: CurrentUserType,
+		@Body() dto: AddEmergencyContactDto,
+	) {
+		return await this.patientService.addEmergencyContact(user.userId, dto);
+	}
+
+	@Delete('emergency-contacts/:contactId')
+	async removeEmergencyContact(
+		@CurrentUser() user: CurrentUserType,
+		@Param('contactId') contactId: string,
+	) {
+		return await this.patientService.removeEmergencyContact(user.userId, contactId);
 	}
 }

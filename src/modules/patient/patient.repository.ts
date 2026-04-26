@@ -8,6 +8,7 @@ import {
 	type PatientMedicalIdentitySnapshot,
 } from './patient-medical-identity.query';
 import { CreateHealthJournalEntryDto } from './dto/create-health-journal-entry.dto';
+import { AddEmergencyContactDto } from './dto/add-emergency-contact.dto';
 
 export interface ActiveDiagnosisJournalOption {
 	diagnosisId: string;
@@ -569,5 +570,105 @@ export class PatientRepository {
 				createdAt: row.created_at,
 			})),
 		};
+	}
+
+	async saveProfilePicture(userId: string, file: Express.Multer.File): Promise<void> {
+		await this.databaseService.query(
+			`
+				INSERT INTO documents
+					(user_id, file_type, file_path, file_name, mime_type, file_size_bytes, uploaded_at)
+				VALUES ($1, 'PROFILE_PICTURE', $2, $3, $4, $5, now())
+			`,
+			[userId, file.path, file.filename, file.mimetype, file.size],
+		);
+	}
+
+	async getLatestProfilePicture(userId: string): Promise<{
+		filePath: string;
+		fileName: string;
+		mimeType: string;
+	} | null> {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT file_path, file_name, mime_type
+				FROM documents
+				WHERE user_id = $1
+					AND file_type = 'PROFILE_PICTURE'
+				ORDER BY uploaded_at DESC NULLS LAST, id DESC
+				LIMIT 1
+			`,
+			[userId],
+		);
+
+		if (rows.length === 0) return null;
+
+		return {
+			filePath: rows[0].file_path,
+			fileName: rows[0].file_name,
+			mimeType: rows[0].mime_type,
+		};
+	}
+
+	async addEmergencyContact(patientId: string, dto: AddEmergencyContactDto) {
+		const client = await this.databaseService.getClient();
+
+		try {
+			await client.query('BEGIN');
+
+			if (dto.isPrimary) {
+				await client.query(
+					`
+						UPDATE patient_emergency_contacts
+						SET is_primary = FALSE
+						WHERE patient_id = $1 AND is_primary = TRUE
+					`,
+					[patientId],
+				);
+			}
+
+			const { rows } = await client.query(
+				`
+					INSERT INTO patient_emergency_contacts
+						(patient_id, contact_name, phone_number, relationship, is_primary)
+					VALUES ($1, $2, $3, $4, $5)
+					RETURNING
+						id AS contact_id,
+						contact_name,
+						phone_number,
+						relationship,
+						is_primary,
+						created_at
+				`,
+				[
+					patientId,
+					dto.contactName,
+					dto.phoneNumber,
+					dto.relationship,
+					dto.isPrimary ?? false,
+				],
+			);
+
+			await client.query('COMMIT');
+			return rows[0];
+		} catch (error) {
+			await client.query('ROLLBACK');
+			throw error;
+		} finally {
+			client.release();
+		}
+	}
+
+	async removeEmergencyContact(patientId: string, contactId: string): Promise<void> {
+		const { rowCount } = await this.databaseService.query(
+			`
+				DELETE FROM patient_emergency_contacts
+				WHERE id = $1 AND patient_id = $2
+			`,
+			[contactId, patientId],
+		);
+
+		if (rowCount === 0) {
+			throw new NotFoundException('Emergency contact not found.');
+		}
 	}
 }
