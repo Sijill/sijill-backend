@@ -662,3 +662,178 @@ INSERT INTO healthcare_providers (
     'Cairo Medical Center', '12 Tahrir St, Cairo',
     now(), now()
 );
+
+-- -------------------------------------------------------------
+-- 1. Clinical Encounter (links patient to HCP, needed for FKs)
+-- -------------------------------------------------------------
+INSERT INTO clinical_encounters (
+    id, patient_id, hcp_id,
+    encounter_date, location_address,
+    next_appointment_date, appointment_notes,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000010',  -- Sara
+    '00000000-0000-0000-0000-000000000011',  -- Dr. Khaled
+    '2025-11-10 09:00:00+00',
+    'Cairo Medical Center, 12 Tahrir St, Cairo',
+    '2026-05-10 09:00:00+00',
+    'Routine follow-up for asthma and diabetes management.',
+    now(), now()
+);
+ 
+-- -------------------------------------------------------------
+-- 2. Diagnoses
+--    - Asthma (active, chronic)
+--    - Type 2 Diabetes (active, non-chronic)
+-- -------------------------------------------------------------
+INSERT INTO diagnoses (
+    id, encounter_id, patient_id,
+    icd11_code, icd11_title, clinical_description,
+    is_chronic, status, diagnosed_date,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000030',
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000010',
+    'CA23',
+    'Asthma',
+    'Mild persistent asthma. Patient reports occasional nocturnal symptoms and exercise-induced wheezing. Well-controlled on current inhaler regimen.',
+    TRUE,
+    'ACTIVE',
+    '2025-11-10 09:00:00+00',
+    now(), now()
+);
+ 
+INSERT INTO diagnoses (
+    id, encounter_id, patient_id,
+    icd11_code, icd11_title, clinical_description,
+    is_chronic, status, diagnosed_date,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000031',
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000010',
+    '5A11',
+    'Type 2 diabetes mellitus',
+    'Newly diagnosed Type 2 diabetes. HbA1c at 7.8%. Patient started on Metformin. Lifestyle modifications advised.',
+    FALSE,
+    'ACTIVE',
+    '2025-11-10 09:00:00+00',
+    now(), now()
+);
+ 
+-- -------------------------------------------------------------
+-- 3. Medications
+--    - Salbutamol inhaler for Asthma
+--    - Metformin for Diabetes
+-- -------------------------------------------------------------
+INSERT INTO medications (
+    id, encounter_id, patient_id, diagnosis_id, prescribed_by_hcp_id,
+    medication_name, dosage_amount, dosage_unit, form,
+    frequency, start_date, end_date, instructions,
+    prescribed_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000040',
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000030',  -- linked to Asthma
+    '00000000-0000-0000-0000-000000000011',
+    'Salbutamol',
+    100, 'MCG', 'INHALER',
+    '2 puffs as needed, maximum 4 times daily',
+    '2025-11-10', NULL,
+    'Shake well before use. Rinse mouth after each use to prevent oral thrush.',
+    '2025-11-10 09:30:00+00',
+    now(), now()
+);
+ 
+INSERT INTO medications (
+    id, encounter_id, patient_id, diagnosis_id, prescribed_by_hcp_id,
+    medication_name, dosage_amount, dosage_unit, form,
+    frequency, start_date, end_date, instructions,
+    prescribed_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000041',
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000031',  -- linked to Diabetes
+    '00000000-0000-0000-0000-000000000011',
+    'Metformin',
+    500, 'MG', 'TABLET',
+    'Twice daily with meals',
+    '2025-11-10', NULL,
+    'Take with food to reduce gastrointestinal side effects. Monitor blood glucose regularly.',
+    '2025-11-10 09:30:00+00',
+    now(), now()
+);
+ 
+-- -------------------------------------------------------------
+-- 4. Allergies
+--    - Penicillin (Severe)
+--    - Shellfish (Moderate)
+-- -------------------------------------------------------------
+INSERT INTO patient_allergies (
+    id, patient_id,
+    allergen_name, severity, reaction_description,
+    diagnosed_by, diagnosed_date,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000050',
+    '00000000-0000-0000-0000-000000000010',
+    'Penicillin',
+    'SEVERE',
+    'Anaphylactic reaction. Patient experienced throat swelling, hives, and drop in blood pressure within 15 minutes of administration.',
+    '00000000-0000-0000-0000-000000000011',
+    '2018-06-01',
+    now(), now()
+);
+ 
+INSERT INTO patient_allergies (
+    id, patient_id,
+    allergen_name, severity, reaction_description,
+    diagnosed_by, diagnosed_date,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000051',
+    '00000000-0000-0000-0000-000000000010',
+    'Shellfish',
+    'MODERATE',
+    'Skin rash, itching, and mild swelling of lips. No respiratory involvement observed.',
+    '00000000-0000-0000-0000-000000000011',
+    '2020-03-14',
+    now(), now()
+);
+ 
+-- -------------------------------------------------------------
+-- 5. Emergency Contacts
+--    - Primary: Husband
+--    - Secondary: Sister
+-- -------------------------------------------------------------
+INSERT INTO patient_emergency_contacts (
+    id, patient_id,
+    contact_name, phone_number, relationship, is_primary,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000060',
+    '00000000-0000-0000-0000-000000000010',
+    'Omar Ahmed Jenkins',
+    '01098887766',
+    'SPOUSE',
+    TRUE,
+    now(), now()
+);
+ 
+INSERT INTO patient_emergency_contacts (
+    id, patient_id,
+    contact_name, phone_number, relationship, is_primary,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000061',
+    '00000000-0000-0000-0000-000000000010',
+    'Nour Ahmed Hassan',
+    '01155443322',
+    'SIBLING',
+    FALSE,
+    now(), now()
+);
