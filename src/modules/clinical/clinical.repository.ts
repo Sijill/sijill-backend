@@ -13,6 +13,7 @@ import {
 	NotificationType,
 	OrderStatus,
 	OrderType,
+	ReminderType,
 	UserRole,
 } from '@common/enums/db.enum';
 import { PinoLogger } from 'nestjs-pino';
@@ -277,7 +278,9 @@ export class ClinicalRepository {
 
 			const hcpResult = await client.query(
 				`
-					SELECT id
+					SELECT
+						id,
+						TRIM(CONCAT_WS(' ', first_name, middle_name, surname)) AS full_name
 					FROM healthcare_providers
 					WHERE user_id = $1
 				`,
@@ -300,6 +303,15 @@ export class ClinicalRepository {
 				[token.id, hcpUserId],
 			);
 
+			const hcp = hcpResult.rows[0];
+			await this.insertNotification(client, {
+				userId: token.patient_user_id,
+				notificationType: NotificationType.SYSTEM,
+				title: 'Account Access',
+				message: `Dr. ${hcp.full_name} accessed your account with ${this.formatAccessType(token.access_type)} access`,
+				scheduledFor: new Date(),
+			});
+
 			await client.query('COMMIT');
 
 			return {
@@ -309,7 +321,7 @@ export class ClinicalRepository {
 				patientUserId: token.patient_user_id,
 				accessType: token.access_type as AccessType,
 				expiresAt: token.expires_at,
-				hcpId: hcpResult.rows[0].id,
+				hcpId: hcp.id,
 				patient: {
 					patientId: token.patient_id,
 					fullName: token.patient_full_name,
@@ -341,7 +353,8 @@ export class ClinicalRepository {
 					ppt.expires_at,
 					ppt.revoked_at AS token_revoked_at,
 					p.user_id AS patient_user_id,
-					h.id AS hcp_id
+					h.id AS hcp_id,
+					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS hcp_full_name
 				FROM patient_access_grants pag
 				INNER JOIN patient_permission_tokens ppt
 					ON ppt.id = pag.permission_token_id
@@ -392,6 +405,7 @@ export class ClinicalRepository {
 			patientUserId: session.patient_user_id,
 			hcpId: session.hcp_id,
 			hcpUserId,
+			hcpFullName: session.hcp_full_name,
 			accessType: session.access_type as AccessType,
 			expiresAt: new Date(session.expires_at).toISOString(),
 		};
@@ -943,16 +957,12 @@ export class ClinicalRepository {
 					now,
 				);
 
-				await this.insertNotification(client, {
-					userId: session.patientUserId,
-					notificationType: NotificationType.MEDICATION_REMINDER,
-					title: `Medication reminder: ${medication.medicationName}`,
-					message: `A new medication was prescribed during your recent encounter.`,
-					relatedEncounterId: encounterId,
-					relatedMedicationId: medicationResult.id,
-					scheduledFor: medication.startDate,
+				await this.insertMedicationReminder(client, {
+					patientId: session.patientId,
+					medicationId: medicationResult.id,
+					startsAt: medication.startDate,
+					endsAt: medication.endDate ?? null,
 				});
-				notificationsCreated += 1;
 			}
 
 			for (const labOrder of dto.labOrders ?? []) {
@@ -964,16 +974,11 @@ export class ClinicalRepository {
 					now,
 				);
 
-				await this.insertNotification(client, {
-					userId: session.patientUserId,
-					notificationType: NotificationType.MEDICAL_ORDER,
-					title: 'New laboratory order',
-					message: 'A laboratory test order was added to your record.',
-					relatedEncounterId: encounterId,
-					relatedOrderId: orderId,
-					scheduledFor: now,
+				await this.insertMedicalOrderReminder(client, {
+					patientId: session.patientId,
+					medicalOrderId: orderId,
+					startsAt: now,
 				});
-				notificationsCreated += 1;
 			}
 
 			for (const imagingOrder of dto.imagingOrders ?? []) {
@@ -985,28 +990,53 @@ export class ClinicalRepository {
 					now,
 				);
 
-				await this.insertNotification(client, {
-					userId: session.patientUserId,
-					notificationType: NotificationType.MEDICAL_ORDER,
-					title: 'New imaging order',
-					message: 'An imaging order was added to your record.',
-					relatedEncounterId: encounterId,
-					relatedOrderId: orderId,
-					scheduledFor: now,
+				await this.insertMedicalOrderReminder(client, {
+					patientId: session.patientId,
+					medicalOrderId: orderId,
+					startsAt: now,
 				});
-				notificationsCreated += 1;
 			}
 
+			await this.insertNotification(client, {
+				userId: session.patientUserId,
+				notificationType: NotificationType.SYSTEM,
+				title: 'New Encounter Added',
+				message: `Dr. ${session.hcpFullName} added a new encounter to your medical history`,
+				scheduledFor: now,
+			});
+			notificationsCreated += 1;
+
 			if (dto.nextAppointmentDate) {
+				const appointmentReminder = await this.insertAppointmentReminder(
+					client,
+					{
+						patientId: session.patientId,
+						encounterId,
+						appointmentAt: dto.nextAppointmentDate,
+					},
+				);
+				const appointmentAt = new Date(dto.nextAppointmentDate);
+
 				await this.insertNotification(client, {
 					userId: session.patientUserId,
-					notificationType: NotificationType.APPOINTMENT_REMINDER,
-					title: 'Upcoming appointment',
-					message:
-						dto.appointmentNotes ??
-						'You have a follow-up appointment scheduled.',
-					relatedEncounterId: encounterId,
-					scheduledFor: dto.nextAppointmentDate,
+					notificationType: NotificationType.REMINDER,
+					title: 'Upcoming Appointment',
+					message: `You have an appointment with Dr. ${session.hcpFullName} tomorrow at ${this.formatAppointmentTime(appointmentAt)}`,
+					reminderId: appointmentReminder.id,
+					scheduledFor: this.addMilliseconds(
+						appointmentAt,
+						-24 * 60 * 60 * 1000,
+					),
+				});
+				notificationsCreated += 1;
+
+				await this.insertNotification(client, {
+					userId: session.patientUserId,
+					notificationType: NotificationType.REMINDER,
+					title: 'Appointment Soon',
+					message: `Your appointment with Dr. ${session.hcpFullName} is in 1 hour`,
+					reminderId: appointmentReminder.id,
+					scheduledFor: this.addMilliseconds(appointmentAt, -60 * 60 * 1000),
 				});
 				notificationsCreated += 1;
 			}
@@ -1214,9 +1244,7 @@ export class ClinicalRepository {
 			notificationType: NotificationType;
 			title: string;
 			message: string;
-			relatedEncounterId?: string;
-			relatedMedicationId?: string;
-			relatedOrderId?: string;
+			reminderId?: string;
 			scheduledFor: string | Date;
 		},
 	) {
@@ -1229,12 +1257,10 @@ export class ClinicalRepository {
 						status,
 						title,
 						message,
-						related_encounter_id,
-						related_medication_id,
-						related_order_id,
+						reminder_id,
 						scheduled_for
 					)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
 			`,
 			[
 				data.userId,
@@ -1242,12 +1268,123 @@ export class ClinicalRepository {
 				NotificationStatus.PENDING,
 				data.title,
 				data.message,
-				data.relatedEncounterId ?? null,
-				data.relatedMedicationId ?? null,
-				data.relatedOrderId ?? null,
+				data.reminderId ?? null,
 				data.scheduledFor,
 			],
 		);
+	}
+
+	private async insertAppointmentReminder(
+		client: PoolClient,
+		data: {
+			patientId: string;
+			encounterId: string;
+			appointmentAt: string;
+		},
+	) {
+		const { rows } = await client.query(
+			`
+				INSERT INTO reminders
+					(
+						patient_id,
+						reminder_type,
+						encounter_id,
+						starts_at,
+						appointment_at
+					)
+				VALUES ($1, $2, $3, $4, $5)
+				RETURNING id
+			`,
+			[
+				data.patientId,
+				ReminderType.APPOINTMENT,
+				data.encounterId,
+				data.appointmentAt.slice(0, 10),
+				data.appointmentAt,
+			],
+		);
+
+		return rows[0];
+	}
+
+	private async insertMedicationReminder(
+		client: PoolClient,
+		data: {
+			patientId: string;
+			medicationId: string;
+			startsAt: string;
+			endsAt: string | null;
+		},
+	) {
+		await client.query(
+			`
+				INSERT INTO reminders
+					(
+						patient_id,
+						reminder_type,
+						medication_id,
+						starts_at,
+						ends_at,
+						reminder_time,
+						custom_days
+					)
+				VALUES ($1, $2, $3, $4, $5, '09:00:00', NULL)
+			`,
+			[
+				data.patientId,
+				ReminderType.MEDICATION,
+				data.medicationId,
+				data.startsAt,
+				data.endsAt,
+			],
+		);
+	}
+
+	private async insertMedicalOrderReminder(
+		client: PoolClient,
+		data: {
+			patientId: string;
+			medicalOrderId: string;
+			startsAt: Date;
+		},
+	) {
+		await client.query(
+			`
+				INSERT INTO reminders
+					(
+						patient_id,
+						reminder_type,
+						medical_order_id,
+						starts_at,
+						reminder_time,
+						custom_days
+					)
+				VALUES ($1, $2, $3, $4, '09:00:00', NULL)
+			`,
+			[
+				data.patientId,
+				ReminderType.MEDICAL_ORDER,
+				data.medicalOrderId,
+				data.startsAt.toISOString().slice(0, 10),
+			],
+		);
+	}
+
+	private addMilliseconds(date: Date, milliseconds: number) {
+		return new Date(date.getTime() + milliseconds);
+	}
+
+	private formatAppointmentTime(date: Date) {
+		return date.toLocaleTimeString('en-US', {
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true,
+			timeZone: 'UTC',
+		});
+	}
+
+	private formatAccessType(accessType: AccessType) {
+		return accessType.toLowerCase().replace(/_/g, ' ');
 	}
 
 	private mapDocumentReference(row: any) {

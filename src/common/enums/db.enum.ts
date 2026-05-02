@@ -53,12 +53,12 @@ export enum BloodType {
 }
 
 export enum EmergencyContactRelationship {
-    PARENT = 'PARENT',
-    SPOUSE = 'SPOUSE',
-    SIBLING = 'SIBLING',
-    FRIEND = 'FRIEND',
-    CAREGIVER = 'CAREGIVER',
-    OTHER = 'OTHER',
+	PARENT = 'PARENT',
+	SPOUSE = 'SPOUSE',
+	SIBLING = 'SIBLING',
+	FRIEND = 'FRIEND',
+	CAREGIVER = 'CAREGIVER',
+	OTHER = 'OTHER',
 }
 
 // Clinical Enums
@@ -127,12 +127,15 @@ export enum OrderPriority {
 }
 
 // MISC
-export enum NotificationType {
-	MEDICATION_REMINDER = 'MEDICATION_REMINDER',
-	APPOINTMENT_REMINDER = 'APPOINTMENT_REMINDER',
+export enum ReminderType {
+	MEDICATION = 'MEDICATION',
+	APPOINTMENT = 'APPOINTMENT',
 	MEDICAL_ORDER = 'MEDICAL_ORDER',
-	FOLLOW_UP = 'FOLLOW_UP',
+}
+
+export enum NotificationType {
 	SYSTEM = 'SYSTEM',
+	REMINDER = 'REMINDER',
 }
 
 export enum NotificationStatus {

@@ -7,32 +7,164 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ------------------------------
 ---- CUSTOM TYPES (ENUMS) ----
 ------------------------------
-CREATE TYPE user_role AS ENUM ('PATIENT','HEALTHCARE_PROVIDER','LAB','IMAGING_CENTER','ADMIN');
-CREATE TYPE account_status AS ENUM ('PENDING','VERIFIED','REJECTED','SUSPENDED','DEACTIVATED');
-CREATE TYPE mfa_method AS ENUM ('NONE', 'EMAIL_OTP', 'SMS_OTP', 'TOTP');
-CREATE TYPE access_type AS ENUM ('READ_ONLY','WRITE_ONLY', 'READ_WRITE');
-CREATE TYPE access_status AS ENUM ('ACTIVE','EXPIRED','REVOKED');
+CREATE TYPE user_role AS ENUM (
+    'PATIENT',
+    'HEALTHCARE_PROVIDER',
+    'LAB',
+    'IMAGING_CENTER',
+    'ADMIN'
+);
 
-CREATE TYPE gender AS ENUM ('MALE','FEMALE');
-CREATE TYPE blood_type AS ENUM ('A+','A-','B+','B-','AB+','AB-','O+','O-','UNKNOWN');
-CREATE TYPE emergency_contact_relationship AS ENUM ('PARENT', 'SPOUSE', 'SIBLING', 'FRIEND', 'CAREGIVER', 'OTHER');
-CREATE TYPE allergy_severity AS ENUM ('MILD','MODERATE','SEVERE','LIFE_THREATENING');
+CREATE TYPE account_status AS ENUM (
+    'PENDING',
+    'VERIFIED',
+    'REJECTED',
+    'SUSPENDED',
+    'DEACTIVATED'
+);
 
-CREATE TYPE order_type AS ENUM ('LABORATORY','IMAGING');
-CREATE TYPE order_priority AS ENUM ('ROUTINE', 'URGENT', 'STAT');
-CREATE TYPE order_status AS ENUM ('PENDING','IN_PROGRESS','COMPLETED','CANCELLED');
+CREATE TYPE mfa_method AS ENUM (
+    'NONE',
+    'EMAIL_OTP',
+    'SMS_OTP',
+    'TOTP'
+);
 
-CREATE TYPE dosage_unit AS ENUM ('MG','MCG','G','ML','IU','UNITS','DROPS','PUFFS','TABLETS','CAPSULES','TEASPOONS');
-CREATE TYPE medication_form AS ENUM ('TABLET','CAPSULE','LIQUID','INJECTION','TOPICAL','INHALER','DROPS','PATCH','OTHER');
+CREATE TYPE access_type AS ENUM (
+    'READ_ONLY',
+    'WRITE_ONLY',
+    'READ_WRITE'
+);
 
-CREATE TYPE diagnosis_status AS ENUM ('ACTIVE','RESOLVED_BY_HCP','RESOLVED_BY_PATIENT');
-CREATE TYPE patient_outcome AS ENUM ('FULLY_RECOVERED','IMPROVED','NO_CHANGE','WORSE');
+CREATE TYPE access_status AS ENUM (
+    'ACTIVE',
+    'EXPIRED',
+    'REVOKED'
+);
 
-CREATE TYPE notification_type AS ENUM ('MEDICATION_REMINDER','APPOINTMENT_REMINDER','MEDICAL_ORDER', 'FOLLOW_UP','SYSTEM');
-CREATE TYPE notification_status AS ENUM ('PENDING','SENT','READ');
-CREATE TYPE file_type AS ENUM ('NATIONAL_ID_FRONT','NATIONAL_ID_BACK','SELFIE_WITH_ID','MEDICAL_LICENSE',
-                                    'WORKPLACE_DOC', 'LAB_ACCREDITATION','RADIOLOGY_ACCREDITATION', 'LOGO',
-                                    'PRESCRIPTION','LAB_RESULT','IMAGING_RESULT','CLINICAL_ATTACHMENT','PROFILE_PICTURE', 'OTHER');
+CREATE TYPE gender AS ENUM (
+    'MALE',
+    'FEMALE'
+);
+
+CREATE TYPE blood_type AS ENUM (
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+    'UNKNOWN'
+);
+
+CREATE TYPE emergency_contact_relationship AS ENUM (
+    'PARENT',
+    'SPOUSE',
+    'SIBLING',
+    'FRIEND',
+    'CAREGIVER',
+    'OTHER'
+);
+
+CREATE TYPE allergy_severity AS ENUM (
+    'MILD',
+    'MODERATE',
+    'SEVERE',
+    'LIFE_THREATENING'
+);
+
+CREATE TYPE order_type AS ENUM (
+    'LABORATORY',
+    'IMAGING'
+);
+
+CREATE TYPE order_priority AS ENUM (
+    'ROUTINE',
+    'URGENT',
+    'STAT'
+);
+
+CREATE TYPE order_status AS ENUM (
+    'PENDING',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'CANCELLED'
+);
+
+CREATE TYPE dosage_unit AS ENUM (
+    'MG',
+    'MCG',
+    'G',
+    'ML',
+    'IU',
+    'UNITS',
+    'DROPS',
+    'PUFFS',
+    'TABLETS',
+    'CAPSULES',
+    'TEASPOONS'
+);
+
+CREATE TYPE medication_form AS ENUM (
+    'TABLET',
+    'CAPSULE',
+    'LIQUID',
+    'INJECTION',
+    'TOPICAL',
+    'INHALER',
+    'DROPS',
+    'PATCH',
+    'OTHER'
+);
+
+CREATE TYPE diagnosis_status AS ENUM (
+    'ACTIVE',
+    'RESOLVED_BY_HCP',
+    'RESOLVED_BY_PATIENT'
+);
+
+CREATE TYPE patient_outcome AS ENUM (
+    'FULLY_RECOVERED',
+    'IMPROVED',
+    'NO_CHANGE',
+    'WORSE'
+);
+
+CREATE TYPE reminder_type AS ENUM (
+    'MEDICATION',
+    'APPOINTMENT',
+    'MEDICAL_ORDER'
+);
+
+CREATE TYPE notification_type AS ENUM (
+    'SYSTEM',
+    'REMINDER'
+);
+
+CREATE TYPE notification_status AS ENUM (
+    'PENDING',
+    'SENT',
+    'READ'
+);
+
+CREATE TYPE file_type AS ENUM (
+    'NATIONAL_ID_FRONT',
+    'NATIONAL_ID_BACK',
+    'SELFIE_WITH_ID',
+    'MEDICAL_LICENSE',
+    'WORKPLACE_DOC',
+    'LAB_ACCREDITATION',
+    'RADIOLOGY_ACCREDITATION',
+    'LOGO',
+    'PRESCRIPTION',
+    'LAB_RESULT',
+    'IMAGING_RESULT',
+    'CLINICAL_ATTACHMENT',
+    'PROFILE_PICTURE',
+    'OTHER'
+);
 ------------------------------
 ------ USERS & PROFILES ------
 ------------------------------
@@ -406,23 +538,65 @@ CREATE TABLE imaging_result_documents (
 ------------------------------
 ------------ MISC ------------
 ------------------------------
+CREATE TABLE reminders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+
+    reminder_type reminder_type NOT NULL,
+
+    -- source (only one will be set depending on type)
+    medication_id UUID REFERENCES medications(id) ON DELETE CASCADE,
+    medical_order_id UUID REFERENCES medical_orders(id) ON DELETE CASCADE,
+    encounter_id UUID REFERENCES clinical_encounters(id) ON DELETE CASCADE,
+
+    -- doctor sets these
+    starts_at DATE,
+    ends_at DATE,           -- nullable, some medications have no end date
+    appointment_at TIMESTAMP WITH TIME ZONE,  -- only for APPOINTMENT type
+
+    -- patient can override these
+    reminder_time TIME NOT NULL DEFAULT '09:00:00',  -- what time of day to notify
+    custom_days INT[] DEFAULT NULL, -- nullable, e.g. {1,3,5} = Mon/Wed/Fri, NULL means every day
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    dismissed_at TIMESTAMP WITH TIME ZONE,  -- patient manually dismissed it
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+
+    -- ensure only one source is set
+    CONSTRAINT chk_reminder_source CHECK (
+        (
+            (medication_id IS NOT NULL)::int +
+            (medical_order_id IS NOT NULL)::int +
+            (encounter_id IS NOT NULL)::int
+        ) = 1
+    )
+);
+
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    notification_type notification_type,
-    status notification_status,
-    title VARCHAR(500),
-    message TEXT,
-    related_encounter_id UUID REFERENCES clinical_encounters(id),
-    related_medication_id UUID REFERENCES medications(id),
-    related_order_id UUID REFERENCES medical_orders(id),
-    related_diagnosis_id UUID REFERENCES diagnoses(id),
-    scheduled_for TIMESTAMP WITH TIME ZONE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    notification_type notification_type NOT NULL,
+    status notification_status NOT NULL DEFAULT 'PENDING',
+
+    title VARCHAR(500) NOT NULL,
+    message TEXT NOT NULL,
+
+    -- only set if this notification was spawned by a reminder
+    reminder_id UUID REFERENCES reminders(id) ON DELETE SET NULL,
+
+    scheduled_for TIMESTAMP WITH TIME ZONE NOT NULL,
     sent_at TIMESTAMP WITH TIME ZONE,
     read_at TIMESTAMP WITH TIME ZONE,
-    dismissed_at TIMESTAMP WITH TIME ZONE,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+CREATE INDEX idx_notifications_polling
+ON notifications (user_id, scheduled_for, status)
+WHERE status = 'PENDING';
 
 CREATE TABLE audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

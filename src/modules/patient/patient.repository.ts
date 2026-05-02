@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import { DatabaseService } from '@db/database.service';
-import { DiagnosisStatus, OrderStatus } from '@common/enums/db.enum';
+import {
+	DiagnosisStatus,
+	NotificationStatus,
+	OrderStatus,
+	ReminderType,
+} from '@common/enums/db.enum';
 import { PoolClient } from 'pg';
 import {
 	loadPatientMedicalIdentity,
@@ -111,8 +116,247 @@ export class PatientRepository {
 		return rows[0] ?? null;
 	}
 
-	async getMedicalIdentity(patientId: string): Promise<PatientMedicalIdentitySnapshot> {
+	async getMedicalIdentity(
+		patientId: string,
+	): Promise<PatientMedicalIdentitySnapshot> {
 		return await loadPatientMedicalIdentity(this.databaseService, patientId);
+	}
+
+	async listActiveReminders(patientId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					r.id AS reminder_id,
+					r.reminder_type,
+					r.medication_id,
+					r.medical_order_id,
+					r.encounter_id,
+					r.starts_at,
+					r.ends_at,
+					r.appointment_at,
+					r.reminder_time,
+					r.custom_days,
+					r.is_active,
+					r.dismissed_at,
+					r.created_at,
+					r.updated_at,
+					m.medication_name,
+					m.dosage_amount,
+					m.dosage_unit,
+					m.form,
+					m.frequency,
+					m.start_date,
+					m.end_date,
+					TRIM(CONCAT_WS(' ', med_h.first_name, med_h.middle_name, med_h.surname)) AS medication_prescribed_by,
+					ce.location_address,
+					ce.appointment_notes,
+					TRIM(CONCAT_WS(' ', appt_h.first_name, appt_h.middle_name, appt_h.surname)) AS appointment_doctor_name,
+					mo.order_type,
+					mo.order_status,
+					mo.ordered_at,
+					TRIM(CONCAT_WS(' ', order_h.first_name, order_h.middle_name, order_h.surname)) AS order_doctor_name,
+					COALESCE(lo.priority, io.priority) AS order_priority,
+					COALESCE(rt.name, ri.name) AS order_name,
+					rs.name AS specimen_type,
+					rb.name AS body_part
+				FROM reminders r
+				LEFT JOIN medications m ON m.id = r.medication_id
+				LEFT JOIN healthcare_providers med_h ON med_h.id = m.prescribed_by_hcp_id
+				LEFT JOIN clinical_encounters ce ON ce.id = r.encounter_id
+				LEFT JOIN healthcare_providers appt_h ON appt_h.id = ce.hcp_id
+				LEFT JOIN medical_orders mo ON mo.id = r.medical_order_id
+				LEFT JOIN healthcare_providers order_h ON order_h.id = mo.ordered_by_hcp_id
+				LEFT JOIN lab_orders lo ON lo.medical_order_id = mo.id
+				LEFT JOIN ref_test_types rt ON rt.id = lo.test_type_id
+				LEFT JOIN ref_specimen_types rs ON rs.id = lo.specimen_type_id
+				LEFT JOIN imaging_orders io ON io.medical_order_id = mo.id
+				LEFT JOIN ref_imaging_types ri ON ri.id = io.imaging_type_id
+				LEFT JOIN ref_body_parts rb ON rb.id = io.body_part_id
+				WHERE r.patient_id = $1
+					AND r.is_active = TRUE
+				ORDER BY
+					r.reminder_type ASC,
+					COALESCE(r.appointment_at, r.starts_at::timestamp, r.created_at) ASC
+			`,
+			[patientId],
+		);
+
+		const reminders = rows.map((row) => this.mapReminder(row));
+
+		return {
+			reminders,
+			grouped: {
+				appointments: reminders.filter(
+					(reminder) => reminder.reminderType === ReminderType.APPOINTMENT,
+				),
+				medications: reminders.filter(
+					(reminder) => reminder.reminderType === ReminderType.MEDICATION,
+				),
+				medicalOrders: reminders.filter(
+					(reminder) => reminder.reminderType === ReminderType.MEDICAL_ORDER,
+				),
+			},
+		};
+	}
+
+	async getReminderForPatient(patientId: string, reminderId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT id, reminder_type
+				FROM reminders
+				WHERE id = $1 AND patient_id = $2
+			`,
+			[reminderId, patientId],
+		);
+
+		return rows[0] ?? null;
+	}
+
+	async updateReminder(
+		patientId: string,
+		reminderId: string,
+		data: {
+			reminderTime?: string;
+			customDays?: number[] | null;
+			hasCustomDays: boolean;
+			isActive?: boolean;
+		},
+	) {
+		const { rows } = await this.databaseService.query(
+			`
+				UPDATE reminders
+				SET
+					reminder_time = COALESCE($3::time, reminder_time),
+					custom_days = CASE
+						WHEN $4::boolean THEN $5::int[]
+						ELSE custom_days
+					END,
+					is_active = COALESCE($6::boolean, is_active),
+					dismissed_at = CASE
+						WHEN $6::boolean = FALSE THEN NOW()
+						ELSE dismissed_at
+					END,
+					updated_at = NOW()
+				WHERE id = $1
+					AND patient_id = $2
+				RETURNING
+					id AS reminder_id,
+					reminder_type,
+					medication_id,
+					medical_order_id,
+					encounter_id,
+					starts_at,
+					ends_at,
+					appointment_at,
+					reminder_time,
+					custom_days,
+					is_active,
+					dismissed_at,
+					created_at,
+					updated_at
+			`,
+			[
+				reminderId,
+				patientId,
+				data.reminderTime ?? null,
+				data.hasCustomDays,
+				data.customDays ?? null,
+				data.isActive ?? null,
+			],
+		);
+
+		if (rows.length === 0) {
+			throw new NotFoundException('Reminder not found.');
+		}
+
+		return { reminder: this.mapReminder(rows[0]) };
+	}
+
+	async listNotifications(patientUserId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					id AS notification_id,
+					notification_type,
+					status,
+					title,
+					message,
+					reminder_id,
+					scheduled_for,
+					sent_at,
+					read_at,
+					created_at
+				FROM notifications
+				WHERE user_id = $1
+				ORDER BY created_at DESC, scheduled_for DESC
+			`,
+			[patientUserId],
+		);
+
+		return { notifications: rows.map((row) => this.mapNotification(row)) };
+	}
+
+	async consumePendingNotifications(patientUserId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				WITH due_notifications AS (
+					SELECT id
+					FROM notifications
+					WHERE user_id = $1
+						AND status = $2
+						AND scheduled_for <= NOW()
+					ORDER BY scheduled_for ASC, created_at ASC
+					FOR UPDATE SKIP LOCKED
+				)
+				UPDATE notifications n
+				SET status = $3, sent_at = NOW()
+				FROM due_notifications d
+				WHERE n.id = d.id
+				RETURNING
+					n.id AS notification_id,
+					n.notification_type,
+					n.status,
+					n.title,
+					n.message,
+					n.reminder_id,
+					n.scheduled_for,
+					n.sent_at,
+					n.read_at,
+					n.created_at
+			`,
+			[patientUserId, NotificationStatus.PENDING, NotificationStatus.SENT],
+		);
+
+		return { notifications: rows.map((row) => this.mapNotification(row)) };
+	}
+
+	async markNotificationRead(patientUserId: string, notificationId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				UPDATE notifications
+				SET status = $3, read_at = NOW()
+				WHERE id = $1
+					AND user_id = $2
+				RETURNING
+					id AS notification_id,
+					notification_type,
+					status,
+					title,
+					message,
+					reminder_id,
+					scheduled_for,
+					sent_at,
+					read_at,
+					created_at
+			`,
+			[notificationId, patientUserId, NotificationStatus.READ],
+		);
+
+		if (rows.length === 0) {
+			throw new NotFoundException('Notification not found.');
+		}
+
+		return { notification: this.mapNotification(rows[0]) };
 	}
 
 	async listActiveDiagnosesForJournal(
@@ -219,8 +463,7 @@ export class PatientRepository {
 				patientOutcome: note.patient_outcome,
 				patientOutcomeDetails: note.patient_outcome_details,
 				mood: note.mood,
-				painLevel:
-					note.pain_level !== null ? Number(note.pain_level) : null,
+				painLevel: note.pain_level !== null ? Number(note.pain_level) : null,
 				energyLevel:
 					note.energy_level !== null ? Number(note.energy_level) : null,
 				createdAt: note.created_at,
@@ -401,12 +644,89 @@ export class PatientRepository {
 				patientOutcome: row.patient_outcome,
 				patientOutcomeDetails: row.patient_outcome_details,
 				mood: row.mood,
-				painLevel:
-					row.pain_level !== null ? Number(row.pain_level) : null,
+				painLevel: row.pain_level !== null ? Number(row.pain_level) : null,
 				energyLevel:
 					row.energy_level !== null ? Number(row.energy_level) : null,
 				createdAt: row.created_at,
 			})),
+		};
+	}
+
+	private mapReminder(row: any) {
+		const base = {
+			reminderId: row.reminder_id,
+			reminderType: row.reminder_type,
+			startsAt: row.starts_at,
+			endsAt: row.ends_at,
+			appointmentAt: row.appointment_at,
+			reminderTime: row.reminder_time,
+			customDays: row.custom_days,
+			isActive: row.is_active,
+			dismissedAt: row.dismissed_at,
+			createdAt: row.created_at,
+			updatedAt: row.updated_at,
+		};
+
+		if (row.reminder_type === ReminderType.MEDICATION) {
+			return {
+				...base,
+				medication: {
+					medicationId: row.medication_id,
+					name: row.medication_name,
+					dosageAmount:
+						row.dosage_amount !== undefined && row.dosage_amount !== null
+							? Number(row.dosage_amount)
+							: null,
+					dosageUnit: row.dosage_unit,
+					form: row.form,
+					frequency: row.frequency,
+					startDate: row.start_date,
+					endDate: row.end_date,
+					prescribedBy: row.medication_prescribed_by,
+				},
+			};
+		}
+
+		if (row.reminder_type === ReminderType.APPOINTMENT) {
+			return {
+				...base,
+				appointment: {
+					encounterId: row.encounter_id,
+					doctorName: row.appointment_doctor_name,
+					location: row.location_address,
+					notes: row.appointment_notes,
+				},
+			};
+		}
+
+		return {
+			...base,
+			medicalOrder: {
+				medicalOrderId: row.medical_order_id,
+				orderType: row.order_type,
+				orderName: row.order_name,
+				priority: row.order_priority,
+				status: row.order_status,
+				orderedAt: row.ordered_at,
+				orderedBy: row.order_doctor_name,
+				specimenType: row.specimen_type,
+				bodyPart: row.body_part,
+			},
+		};
+	}
+
+	private mapNotification(row: any) {
+		return {
+			notificationId: row.notification_id,
+			notificationType: row.notification_type,
+			status: row.status,
+			title: row.title,
+			message: row.message,
+			reminderId: row.reminder_id,
+			scheduledFor: row.scheduled_for,
+			sentAt: row.sent_at,
+			readAt: row.read_at,
+			createdAt: row.created_at,
 		};
 	}
 
@@ -507,8 +827,12 @@ export class PatientRepository {
 				lastEntryDate: row.last_entry_date,
 				lastEntry: {
 					patientOutcome: row.last_patient_outcome,
-					painLevel: row.last_pain_level !== null ? Number(row.last_pain_level) : null,
-					energyLevel: row.last_energy_level !== null ? Number(row.last_energy_level) : null,
+					painLevel:
+						row.last_pain_level !== null ? Number(row.last_pain_level) : null,
+					energyLevel:
+						row.last_energy_level !== null
+							? Number(row.last_energy_level)
+							: null,
 					mood: row.last_mood,
 					createdAt: row.last_note_created_at,
 				},
@@ -566,13 +890,17 @@ export class PatientRepository {
 				patientOutcomeDetails: row.patient_outcome_details,
 				mood: row.mood,
 				painLevel: row.pain_level !== null ? Number(row.pain_level) : null,
-				energyLevel: row.energy_level !== null ? Number(row.energy_level) : null,
+				energyLevel:
+					row.energy_level !== null ? Number(row.energy_level) : null,
 				createdAt: row.created_at,
 			})),
 		};
 	}
 
-	async saveProfilePicture(userId: string, file: Express.Multer.File): Promise<void> {
+	async saveProfilePicture(
+		userId: string,
+		file: Express.Multer.File,
+	): Promise<void> {
 		await this.databaseService.query(
 			`
 				INSERT INTO documents
@@ -658,7 +986,10 @@ export class PatientRepository {
 		}
 	}
 
-	async removeEmergencyContact(patientId: string, contactId: string): Promise<void> {
+	async removeEmergencyContact(
+		patientId: string,
+		contactId: string,
+	): Promise<void> {
 		const { rowCount } = await this.databaseService.query(
 			`
 				DELETE FROM patient_emergency_contacts

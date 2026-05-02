@@ -1,4 +1,5 @@
 import {
+	BadRequestException,
 	Injectable,
 	InternalServerErrorException,
 	NotFoundException,
@@ -13,6 +14,7 @@ import { stat as fsStat } from 'fs/promises';
 import * as path from 'path';
 import type { Response } from 'express';
 import { AddEmergencyContactDto } from './dto/add-emergency-contact.dto';
+import { UpdateReminderDto } from './dto/update-reminder.dto';
 
 @Injectable()
 export class PatientService {
@@ -98,6 +100,161 @@ export class PatientService {
 		}
 	}
 
+	async listActiveReminders(patientUserId: string) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			return await this.patientRepository.listActiveReminders(patient.id);
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load active reminders.',
+			);
+		}
+	}
+
+	async updateReminder(
+		patientUserId: string,
+		reminderId: string,
+		dto: UpdateReminderDto,
+	) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const reminder = await this.patientRepository.getReminderForPatient(
+				patient.id,
+				reminderId,
+			);
+
+			if (!reminder) {
+				throw new NotFoundException('Reminder not found.');
+			}
+
+			const reminderTime = dto.reminder_time ?? dto.reminderTime;
+			const customDays = dto.custom_days ?? dto.customDays;
+			const isActive = dto.is_active ?? dto.isActive;
+			const hasTime = reminderTime !== undefined;
+			const hasCustomDays =
+				dto.custom_days !== undefined || dto.customDays !== undefined;
+			const hasActive = isActive !== undefined;
+
+			if (!hasTime && !hasCustomDays && !hasActive) {
+				throw new BadRequestException(
+					'At least one reminder update field is required.',
+				);
+			}
+
+			if (
+				(hasTime || hasCustomDays) &&
+				reminder.reminder_type !== 'MEDICATION'
+			) {
+				throw new BadRequestException(
+					'Only medication reminders can customize reminder_time or custom_days.',
+				);
+			}
+
+			if (hasActive) {
+				if (isActive !== false) {
+					throw new BadRequestException(
+						'Only dismissing a reminder with is_active=false is supported.',
+					);
+				}
+
+				if (reminder.reminder_type !== 'MEDICAL_ORDER') {
+					throw new BadRequestException(
+						'Only medical order reminders can be dismissed by the patient.',
+					);
+				}
+			}
+
+			return await this.patientRepository.updateReminder(
+				patient.id,
+				reminderId,
+				{
+					reminderTime,
+					customDays,
+					hasCustomDays,
+					isActive,
+				},
+			);
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to update reminder.');
+		}
+	}
+
+	async listNotifications(patientUserId: string) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			return await this.patientRepository.listNotifications(patient.user_id);
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to load notifications.');
+		}
+	}
+
+	async consumePendingNotifications(patientUserId: string) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			return await this.patientRepository.consumePendingNotifications(
+				patient.user_id,
+			);
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load pending notifications.',
+			);
+		}
+	}
+
+	async markNotificationRead(patientUserId: string, notificationId: string) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			return await this.patientRepository.markNotificationRead(
+				patient.user_id,
+				notificationId,
+			);
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to mark notification as read.',
+			);
+		}
+	}
+
 	async listHealthJournalDiagnoses(patientUserId: string) {
 		try {
 			const patient =
@@ -108,9 +265,7 @@ export class PatientService {
 			}
 
 			const diagnoses =
-				await this.patientRepository.listActiveDiagnosesForJournal(
-					patient.id,
-				);
+				await this.patientRepository.listActiveDiagnosesForJournal(patient.id);
 
 			return { diagnoses };
 		} catch (error) {
@@ -189,33 +344,45 @@ export class PatientService {
 
 	async listHealthJournalDiagnosesSummary(patientUserId: string) {
 		try {
-			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
 			if (!patient) throw new NotFoundException('Patient profile not found.');
 
-			return await this.patientRepository.listHealthJournalDiagnosesSummary(patient.id);
+			return await this.patientRepository.listHealthJournalDiagnosesSummary(
+				patient.id,
+			);
 		} catch (error) {
 			if (error instanceof NotFoundException) throw error;
 			this.logger.error(error);
-			throw new InternalServerErrorException('Failed to load health journal diagnoses.');
+			throw new InternalServerErrorException(
+				'Failed to load health journal diagnoses.',
+			);
 		}
 	}
 
 	async listHealthJournalNotes(patientUserId: string, diagnosisId: string) {
 		try {
-			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
 			if (!patient) throw new NotFoundException('Patient profile not found.');
 
-			return await this.patientRepository.listHealthJournalNotes(patient.id, diagnosisId);
+			return await this.patientRepository.listHealthJournalNotes(
+				patient.id,
+				diagnosisId,
+			);
 		} catch (error) {
 			if (error instanceof NotFoundException) throw error;
 			this.logger.error(error);
-			throw new InternalServerErrorException('Failed to load health journal notes.');
+			throw new InternalServerErrorException(
+				'Failed to load health journal notes.',
+			);
 		}
 	}
 
 	async uploadProfilePicture(patientUserId: string, file: Express.Multer.File) {
 		try {
-			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
 			if (!patient) throw new NotFoundException('Patient profile not found.');
 
 			await this.patientRepository.saveProfilePicture(patient.user_id, file);
@@ -224,16 +391,24 @@ export class PatientService {
 		} catch (error) {
 			if (error instanceof NotFoundException) throw error;
 			this.logger.error(error);
-			throw new InternalServerErrorException('Failed to upload profile picture.');
+			throw new InternalServerErrorException(
+				'Failed to upload profile picture.',
+			);
 		}
 	}
 
-	async getProfilePicture(patientUserId: string, res: Response): Promise<StreamableFile> {
+	async getProfilePicture(
+		patientUserId: string,
+		res: Response,
+	): Promise<StreamableFile> {
 		try {
-			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
 			if (!patient) throw new NotFoundException('Patient profile not found.');
 
-			const document = await this.patientRepository.getLatestProfilePicture(patient.user_id);
+			const document = await this.patientRepository.getLatestProfilePicture(
+				patient.user_id,
+			);
 
 			if (!document) {
 				throw new NotFoundException('No profile picture set.');
@@ -256,35 +431,62 @@ export class PatientService {
 		} catch (error) {
 			if (error instanceof NotFoundException) throw error;
 			this.logger.error(error);
-			throw new InternalServerErrorException('Failed to retrieve profile picture.');
+			throw new InternalServerErrorException(
+				'Failed to retrieve profile picture.',
+			);
 		}
 	}
 
-	async addEmergencyContact(patientUserId: string, dto: AddEmergencyContactDto) {
+	async addEmergencyContact(
+		patientUserId: string,
+		dto: AddEmergencyContactDto,
+	) {
 		try {
-			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
 			if (!patient) throw new NotFoundException('Patient profile not found.');
 
-			const contact = await this.patientRepository.addEmergencyContact(patient.id, dto);
+			const contact = await this.patientRepository.addEmergencyContact(
+				patient.id,
+				dto,
+			);
 			return { contact };
 		} catch (error) {
 			if (error instanceof NotFoundException) throw error;
 			this.logger.error(error);
-			throw new InternalServerErrorException('Failed to add emergency contact.');
+			throw new InternalServerErrorException(
+				'Failed to add emergency contact.',
+			);
 		}
 	}
 
 	async removeEmergencyContact(patientUserId: string, contactId: string) {
 		try {
-			const patient = await this.patientRepository.getPatientByUserId(patientUserId);
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
 			if (!patient) throw new NotFoundException('Patient profile not found.');
 
-			await this.patientRepository.removeEmergencyContact(patient.id, contactId);
+			await this.patientRepository.removeEmergencyContact(
+				patient.id,
+				contactId,
+			);
 			return { message: 'Emergency contact removed.' };
 		} catch (error) {
 			if (error instanceof NotFoundException) throw error;
 			this.logger.error(error);
-			throw new InternalServerErrorException('Failed to remove emergency contact.');
+			throw new InternalServerErrorException(
+				'Failed to remove emergency contact.',
+			);
+		}
+	}
+
+	private rethrowKnown(error: any): never | void {
+		if (
+			error instanceof BadRequestException ||
+			error instanceof NotFoundException ||
+			error instanceof InternalServerErrorException
+		) {
+			throw error;
 		}
 	}
 }

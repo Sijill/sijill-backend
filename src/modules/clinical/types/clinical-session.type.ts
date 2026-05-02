@@ -19,6 +19,7 @@ export interface ClinicalSessionContext {
 	patientUserId: string;
 	hcpId: string;
 	hcpUserId: string;
+	hcpFullName: string;
 	accessType: AccessType;
 	expiresAt: string;
 }

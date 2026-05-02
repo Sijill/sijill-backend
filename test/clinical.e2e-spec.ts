@@ -21,6 +21,8 @@ const PATIENT_USER_ID = '11111111-1111-1111-1111-111111111111';
 const PATIENT_ID = '22222222-2222-2222-2222-222222222222';
 const HCP_USER_ID = '33333333-3333-3333-3333-333333333333';
 const HCP_ID = '44444444-4444-4444-4444-444444444444';
+const OTHER_PATIENT_USER_ID = '20202020-2020-2020-2020-202020202020';
+const OTHER_PATIENT_ID = '21212121-2121-2121-2121-212121212121';
 const PAST_ENCOUNTER_ID = '55555555-5555-5555-5555-555555555555';
 const CHRONIC_DIAGNOSIS_ID = '66666666-6666-6666-6666-666666666666';
 const ACUTE_DIAGNOSIS_ID = '77777777-7777-7777-7777-777777777777';
@@ -45,6 +47,7 @@ describe('ClinicalModule (e2e)', () => {
 	let databaseName: string;
 	let originalFetch: typeof fetch | undefined;
 	let patientJwt: string;
+	let otherPatientJwt: string;
 	let hcpJwt: string;
 	let tokenId: string;
 	let sessionId: string;
@@ -91,6 +94,11 @@ describe('ClinicalModule (e2e)', () => {
 		patientJwt = signAccessToken({
 			userId: PATIENT_USER_ID,
 			email: 'patient@test.local',
+			role: UserRole.PATIENT,
+		});
+		otherPatientJwt = signAccessToken({
+			userId: OTHER_PATIENT_USER_ID,
+			email: 'other.patient@test.local',
 			role: UserRole.PATIENT,
 		});
 		hcpJwt = signAccessToken({
@@ -254,7 +262,8 @@ describe('ClinicalModule (e2e)', () => {
 			.send({
 				diagnosisId: ACUTE_DIAGNOSIS_ID,
 				patientOutcome: 'WORSE',
-				patientOutcomeDetails: 'Cough felt tighter after climbing stairs today.',
+				patientOutcomeDetails:
+					'Cough felt tighter after climbing stairs today.',
 				painLevel: 7,
 				energyLevel: 3,
 				mood: 'More tired today after walking and a little anxious.',
@@ -264,8 +273,7 @@ describe('ClinicalModule (e2e)', () => {
 		expect(response.body.entry).toMatchObject({
 			diagnosisId: ACUTE_DIAGNOSIS_ID,
 			patientOutcome: 'WORSE',
-			patientOutcomeDetails:
-				'Cough felt tighter after climbing stairs today.',
+			patientOutcomeDetails: 'Cough felt tighter after climbing stairs today.',
 			painLevel: 7,
 			energyLevel: 3,
 			mood: 'More tired today after walking and a little anxious.',
@@ -293,8 +301,7 @@ describe('ClinicalModule (e2e)', () => {
 
 		expect(storedNotes.rows[0]).toMatchObject({
 			total: 2,
-			latest_mood:
-				'More tired today after walking and a little anxious.',
+			latest_mood: 'More tired today after walking and a little anxious.',
 		});
 
 		const geminiRequest = fetchMock.mock.calls[0]?.[1];
@@ -622,7 +629,7 @@ describe('ClinicalModule (e2e)', () => {
 		expect(createResponse.body).toMatchObject({
 			success: true,
 			message: 'Encounter recorded successfully',
-			notificationsCreated: 7,
+			notificationsCreated: 3,
 		});
 		expect(createResponse.body.encounterId).toMatch(/^[0-9a-f-]{36}$/i);
 		createdEncounterId = createResponse.body.encounterId;
@@ -691,6 +698,24 @@ describe('ClinicalModule (e2e)', () => {
 				GROUP BY notification_type
 			`,
 			[PATIENT_USER_ID],
+		);
+		const reminderQuery = await db.query(
+			`
+				SELECT reminder_type, COUNT(*)::INT AS total
+				FROM reminders
+				WHERE patient_id = $1
+					AND (
+						encounter_id = $2
+						OR medication_id IN (
+							SELECT id FROM medications WHERE encounter_id = $2
+						)
+						OR medical_order_id IN (
+							SELECT id FROM medical_orders WHERE encounter_id = $2
+						)
+					)
+				GROUP BY reminder_type
+			`,
+			[PATIENT_ID, createdEncounterId],
 		);
 		const identityResponse = await request(app.getHttpServer())
 			.get(`/api/v1/clinical/sessions/${sessionId}/medical-identity`)
@@ -767,19 +792,32 @@ describe('ClinicalModule (e2e)', () => {
 		expect(notificationQuery.rows).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
-					notification_type: 'APPOINTMENT_REMINDER',
-					total: 1,
-				}),
-				expect.objectContaining({
-					notification_type: 'MEDICATION_REMINDER',
+					notification_type: 'SYSTEM',
 					total: 2,
 				}),
 				expect.objectContaining({
-					notification_type: 'MEDICAL_ORDER',
+					notification_type: 'REMINDER',
+					total: 2,
+				}),
+			]),
+		);
+		expect(reminderQuery.rows).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					reminder_type: 'APPOINTMENT',
+					total: 1,
+				}),
+				expect.objectContaining({
+					reminder_type: 'MEDICATION',
+					total: 2,
+				}),
+				expect.objectContaining({
+					reminder_type: 'MEDICAL_ORDER',
 					total: 4,
 				}),
 			]),
 		);
+
 		expect(identityResponse.body.activeDiagnoses).toHaveLength(4);
 		expect(identityResponse.body.currentMedications).toHaveLength(3);
 		expect(identityResponse.body.allergies).toHaveLength(3);
@@ -804,6 +842,535 @@ describe('ClinicalModule (e2e)', () => {
 		expect(detailResponse.body.diagnoses).toHaveLength(2);
 		expect(detailResponse.body.medications).toHaveLength(2);
 		expect(detailResponse.body.orders).toHaveLength(4);
+	});
+
+	it('creates exact reminder facts and notification delivery rows for token access and encounter events', async () => {
+		const reminders = await db.query(
+			`
+				SELECT
+					r.id,
+					r.reminder_type,
+					r.starts_at::text AS starts_at,
+					r.ends_at::text AS ends_at,
+					r.appointment_at,
+					r.reminder_time,
+					r.custom_days,
+					r.is_active,
+					r.medication_id,
+					r.medical_order_id,
+					r.encounter_id,
+					m.medication_name,
+					mo.order_type
+				FROM reminders r
+				LEFT JOIN medications m ON m.id = r.medication_id
+				LEFT JOIN medical_orders mo ON mo.id = r.medical_order_id
+				WHERE r.patient_id = $1
+					AND (
+						r.encounter_id = $2
+						OR r.medication_id IN (
+							SELECT id FROM medications WHERE encounter_id = $2
+						)
+						OR r.medical_order_id IN (
+							SELECT id FROM medical_orders WHERE encounter_id = $2
+						)
+					)
+				ORDER BY r.reminder_type ASC, r.created_at ASC
+			`,
+			[PATIENT_ID, createdEncounterId],
+		);
+
+		const appointmentReminders = reminders.rows.filter(
+			(row) => row.reminder_type === 'APPOINTMENT',
+		);
+		const medicationReminders = reminders.rows.filter(
+			(row) => row.reminder_type === 'MEDICATION',
+		);
+		const orderReminders = reminders.rows.filter(
+			(row) => row.reminder_type === 'MEDICAL_ORDER',
+		);
+
+		expect(appointmentReminders).toHaveLength(1);
+		expect(medicationReminders).toHaveLength(2);
+		expect(orderReminders).toHaveLength(4);
+
+		expect(appointmentReminders[0]).toMatchObject({
+			encounter_id: createdEncounterId,
+			medication_id: null,
+			medical_order_id: null,
+			reminder_time: '09:00:00',
+			custom_days: null,
+			is_active: true,
+		});
+		expect(toIso(appointmentReminders[0].appointment_at)).toBe(
+			'2026-05-01T09:00:00.000Z',
+		);
+
+		expect(medicationReminders).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					medication_name: 'Azithromycin',
+					encounter_id: null,
+					medical_order_id: null,
+					reminder_time: '09:00:00',
+					custom_days: null,
+					is_active: true,
+				}),
+				expect.objectContaining({
+					medication_name: 'Amlodipine',
+					encounter_id: null,
+					medical_order_id: null,
+					reminder_time: '09:00:00',
+					custom_days: null,
+					is_active: true,
+				}),
+			]),
+		);
+		const azithromycinReminder = medicationReminders.find(
+			(row) => row.medication_name === 'Azithromycin',
+		);
+		const amlodipineReminder = medicationReminders.find(
+			(row) => row.medication_name === 'Amlodipine',
+		);
+		expect(azithromycinReminder).toBeDefined();
+		expect(amlodipineReminder).toBeDefined();
+		expect(toDateOnly(azithromycinReminder!.starts_at)).toBe('2026-04-18');
+		expect(toDateOnly(azithromycinReminder!.ends_at)).toBe('2026-05-02');
+		expect(toDateOnly(amlodipineReminder!.starts_at)).toBe('2026-04-18');
+		expect(amlodipineReminder!.ends_at).toBeNull();
+
+		expect(orderReminders).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					order_type: 'LABORATORY',
+					encounter_id: null,
+					medication_id: null,
+					reminder_time: '09:00:00',
+					custom_days: null,
+					is_active: true,
+				}),
+				expect.objectContaining({
+					order_type: 'IMAGING',
+					encounter_id: null,
+					medication_id: null,
+					reminder_time: '09:00:00',
+					custom_days: null,
+					is_active: true,
+				}),
+			]),
+		);
+
+		const notifications = await db.query(
+			`
+				SELECT
+					id,
+					notification_type,
+					status,
+					title,
+					message,
+					reminder_id,
+					scheduled_for
+				FROM notifications
+				WHERE user_id = $1
+				ORDER BY created_at ASC, scheduled_for ASC
+			`,
+			[PATIENT_USER_ID],
+		);
+
+		expect(notifications.rows).toHaveLength(4);
+		expect(notifications.rows).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					notification_type: 'SYSTEM',
+					status: 'PENDING',
+					title: 'Account Access',
+					message:
+						'Dr. Khaled Mostafa Ali accessed your account with read write access',
+					reminder_id: null,
+				}),
+				expect.objectContaining({
+					notification_type: 'SYSTEM',
+					status: 'PENDING',
+					title: 'New Encounter Added',
+					message:
+						'Dr. Khaled Mostafa Ali added a new encounter to your medical history',
+					reminder_id: null,
+				}),
+			]),
+		);
+
+		const appointmentNotifications = notifications.rows.filter(
+			(row) => row.reminder_id === appointmentReminders[0].id,
+		);
+		expect(appointmentNotifications).toHaveLength(2);
+		expect(appointmentNotifications).toEqual([
+			expect.objectContaining({
+				notification_type: 'REMINDER',
+				title: 'Upcoming Appointment',
+				message:
+					'You have an appointment with Dr. Khaled Mostafa Ali tomorrow at 9:00 AM',
+			}),
+			expect.objectContaining({
+				notification_type: 'REMINDER',
+				title: 'Appointment Soon',
+				message: 'Your appointment with Dr. Khaled Mostafa Ali is in 1 hour',
+			}),
+		]);
+		expect(toIso(appointmentNotifications[0].scheduled_for)).toBe(
+			'2026-04-30T09:00:00.000Z',
+		);
+		expect(toIso(appointmentNotifications[1].scheduled_for)).toBe(
+			'2026-05-01T08:00:00.000Z',
+		);
+
+		const medicationNotificationCount = await db.query(
+			`
+				SELECT COUNT(*)::INT AS total
+				FROM notifications
+				WHERE reminder_id IN (
+					SELECT id FROM reminders WHERE medication_id IS NOT NULL
+				)
+			`,
+		);
+		expect(medicationNotificationCount.rows[0].total).toBe(0);
+	});
+
+	it('returns active reminders grouped for Flutter scheduling through both reminder endpoints', async () => {
+		const response = await request(app.getHttpServer())
+			.get('/api/v1/patient/reminders')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+		const activeResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/reminders/active')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(response.body.reminders).toHaveLength(7);
+		expect(response.body.grouped.appointments).toHaveLength(1);
+		expect(response.body.grouped.medications).toHaveLength(2);
+		expect(response.body.grouped.medicalOrders).toHaveLength(4);
+		expect(activeResponse.body.grouped).toEqual(response.body.grouped);
+
+		expect(response.body.grouped.appointments[0]).toMatchObject({
+			reminderType: 'APPOINTMENT',
+			reminderTime: '09:00:00',
+			customDays: null,
+			isActive: true,
+			appointmentAt: '2026-05-01T09:00:00.000Z',
+			appointment: {
+				encounterId: createdEncounterId,
+				doctorName: 'Khaled Mostafa Ali',
+				location: 'Cairo Medical Center, 99 Tahrir St, Cairo',
+				notes: 'Review response to antibiotics',
+			},
+		});
+
+		expect(response.body.grouped.medications).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					reminderType: 'MEDICATION',
+					reminderTime: '09:00:00',
+					customDays: null,
+					isActive: true,
+					medication: expect.objectContaining({
+						name: 'Amlodipine',
+						dosageAmount: 5,
+						dosageUnit: 'MG',
+						frequency: 'Once daily at night',
+						prescribedBy: 'Khaled Mostafa Ali',
+					}),
+				}),
+			]),
+		);
+
+		expect(response.body.grouped.medicalOrders).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					reminderType: 'MEDICAL_ORDER',
+					reminderTime: '09:00:00',
+					customDays: null,
+					isActive: true,
+					medicalOrder: expect.objectContaining({
+						orderType: 'LABORATORY',
+						orderName: 'COMPLETE_BLOOD_COUNT',
+						priority: 'ROUTINE',
+						status: 'PENDING',
+						orderedBy: 'Khaled Mostafa Ali',
+					}),
+				}),
+				expect.objectContaining({
+					medicalOrder: expect.objectContaining({
+						orderType: 'IMAGING',
+						orderName: 'MRI',
+						bodyPart: 'CHEST',
+					}),
+				}),
+			]),
+		);
+	});
+
+	it('allows only medication customization and medical-order dismissal', async () => {
+		const remindersResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/reminders')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		const medicationReminder = remindersResponse.body.grouped.medications.find(
+			(reminder: { medication: { name: string } }) =>
+				reminder.medication.name === 'Amlodipine',
+		);
+		const appointmentReminder = remindersResponse.body.grouped.appointments[0];
+		const orderReminder = remindersResponse.body.grouped.medicalOrders[0];
+
+		const updatedMedicationReminder = await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${medicationReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ reminder_time: '07:30', custom_days: [1, 3, 5] })
+			.expect(200);
+
+		expect(updatedMedicationReminder.body.reminder).toMatchObject({
+			reminderId: medicationReminder.reminderId,
+			reminderTime: '07:30:00',
+			customDays: [1, 3, 5],
+			isActive: true,
+		});
+
+		const resetMedicationReminder = await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${medicationReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ reminderTime: '06:15:00', customDays: null })
+			.expect(200);
+
+		expect(resetMedicationReminder.body.reminder).toMatchObject({
+			reminderId: medicationReminder.reminderId,
+			reminderTime: '06:15:00',
+			customDays: null,
+		});
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${appointmentReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ reminder_time: '10:00' })
+			.expect(400);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${orderReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ custom_days: [2, 4] })
+			.expect(400);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${medicationReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ is_active: false })
+			.expect(400);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${appointmentReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ is_active: false })
+			.expect(400);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${orderReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ is_active: true })
+			.expect(400);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${medicationReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ reminder_time: '25:00' })
+			.expect(400);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${medicationReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ custom_days: [0] })
+			.expect(400);
+
+		const dismissedOrderReminder = await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${orderReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.send({ is_active: false })
+			.expect(200);
+
+		expect(dismissedOrderReminder.body.reminder).toMatchObject({
+			reminderId: orderReminder.reminderId,
+			isActive: false,
+		});
+		expect(dismissedOrderReminder.body.reminder.dismissedAt).toBeTruthy();
+
+		const activeAfterDismissal = await request(app.getHttpServer())
+			.get('/api/v1/patient/reminders')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(activeAfterDismissal.body.reminders).toHaveLength(6);
+		expect(activeAfterDismissal.body.grouped.medicalOrders).toHaveLength(3);
+		expect(
+			activeAfterDismissal.body.reminders.some(
+				(reminder: { reminderId: string }) =>
+					reminder.reminderId === orderReminder.reminderId,
+			),
+		).toBe(false);
+	});
+
+	it('protects reminders from cross-patient access', async () => {
+		const remindersResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/reminders')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+		const reminderId = remindersResponse.body.reminders[0].reminderId;
+
+		const otherPatientReminders = await request(app.getHttpServer())
+			.get('/api/v1/patient/reminders')
+			.set('Authorization', `Bearer ${otherPatientJwt}`)
+			.expect(200);
+
+		expect(otherPatientReminders.body.reminders).toHaveLength(0);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${reminderId}`)
+			.set('Authorization', `Bearer ${otherPatientJwt}`)
+			.send({ reminder_time: '08:00' })
+			.expect(404);
+	});
+
+	it('polls pending notifications once, preserves future notifications, and marks read notifications', async () => {
+		const futureNotification = await db.query(
+			`
+				INSERT INTO notifications
+					(user_id, notification_type, status, title, message, scheduled_for)
+				VALUES ($1, 'SYSTEM', 'PENDING', 'Future Notice', 'This should not be delivered yet.', NOW() + INTERVAL '1 day')
+				RETURNING id
+			`,
+			[PATIENT_USER_ID],
+		);
+
+		const pendingResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/notifications/pending')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(pendingResponse.body.notifications).toHaveLength(4);
+		expect(pendingResponse.body.notifications).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					notificationType: 'SYSTEM',
+					status: 'SENT',
+					title: 'Account Access',
+				}),
+				expect.objectContaining({
+					notificationType: 'SYSTEM',
+					status: 'SENT',
+					title: 'New Encounter Added',
+				}),
+				expect.objectContaining({
+					notificationType: 'REMINDER',
+					status: 'SENT',
+					title: 'Upcoming Appointment',
+				}),
+				expect.objectContaining({
+					notificationType: 'REMINDER',
+					status: 'SENT',
+					title: 'Appointment Soon',
+				}),
+			]),
+		);
+		expect(
+			pendingResponse.body.notifications.some(
+				(notification: { notificationId: string }) =>
+					notification.notificationId === futureNotification.rows[0].id,
+			),
+		).toBe(false);
+
+		const secondPendingResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/notifications/pending')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(secondPendingResponse.body.notifications).toHaveLength(0);
+
+		const notificationStatuses = await db.query(
+			`
+				SELECT status, COUNT(*)::INT AS total
+				FROM notifications
+				WHERE user_id = $1
+				GROUP BY status
+			`,
+			[PATIENT_USER_ID],
+		);
+		expect(notificationStatuses.rows).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ status: 'SENT', total: 4 }),
+				expect.objectContaining({ status: 'PENDING', total: 1 }),
+			]),
+		);
+
+		const readResponse = await request(app.getHttpServer())
+			.patch(
+				`/api/v1/patient/notifications/${pendingResponse.body.notifications[0].notificationId}/read`,
+			)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(readResponse.body.notification).toMatchObject({
+			notificationId: pendingResponse.body.notifications[0].notificationId,
+			status: 'READ',
+		});
+		expect(readResponse.body.notification.readAt).toBeTruthy();
+
+		const historyResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/notifications')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(historyResponse.body.notifications).toHaveLength(5);
+		expect(historyResponse.body.notifications).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					notificationId: futureNotification.rows[0].id,
+					status: 'PENDING',
+					title: 'Future Notice',
+				}),
+				expect.objectContaining({
+					notificationId: pendingResponse.body.notifications[0].notificationId,
+					status: 'READ',
+				}),
+			]),
+		);
+	});
+
+	it('protects notifications from cross-patient access and missing ids', async () => {
+		const historyResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/notifications')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+		const notificationId = historyResponse.body.notifications[0].notificationId;
+
+		const otherPatientHistory = await request(app.getHttpServer())
+			.get('/api/v1/patient/notifications')
+			.set('Authorization', `Bearer ${otherPatientJwt}`)
+			.expect(200);
+		const otherPatientPending = await request(app.getHttpServer())
+			.get('/api/v1/patient/notifications/pending')
+			.set('Authorization', `Bearer ${otherPatientJwt}`)
+			.expect(200);
+
+		expect(otherPatientHistory.body.notifications).toHaveLength(0);
+		expect(otherPatientPending.body.notifications).toHaveLength(0);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/notifications/${notificationId}/read`)
+			.set('Authorization', `Bearer ${otherPatientJwt}`)
+			.expect(404);
+
+		await request(app.getHttpServer())
+			.patch(
+				'/api/v1/patient/notifications/00000000-0000-0000-0000-000000000000/read',
+			)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(404);
 	});
 
 	it('rejects invalid diagnosis references and rolls the encounter transaction back', async () => {
@@ -932,6 +1499,18 @@ function signAccessToken(payload: {
 	return jwt.sign(payload, TEST_ACCESS_SECRET, { expiresIn: '15m' });
 }
 
+function toIso(value: string | Date) {
+	return new Date(value).toISOString();
+}
+
+function toDateOnly(value: string | Date) {
+	if (typeof value === 'string') {
+		return value.slice(0, 10);
+	}
+
+	return value.toISOString().slice(0, 10);
+}
+
 async function seedClinicalTestData(db: DatabaseService) {
 	await db.query(
 		`
@@ -947,7 +1526,8 @@ async function seedClinicalTestData(db: DatabaseService) {
 				)
 			VALUES
 				($1, $2, $3, $4, $5, 'VERIFIED', TRUE),
-				($6, $7, $8, $9, $10, 'VERIFIED', TRUE)
+				($6, $7, $8, $9, $10, 'VERIFIED', TRUE),
+				($11, $12, $13, $14, $15, 'VERIFIED', TRUE)
 		`,
 		[
 			PATIENT_USER_ID,
@@ -960,6 +1540,11 @@ async function seedClinicalTestData(db: DatabaseService) {
 			'+201000000002',
 			'hashed-password',
 			UserRole.HEALTHCARE_PROVIDER,
+			OTHER_PATIENT_USER_ID,
+			'other.patient@test.local',
+			'+201000000003',
+			'hashed-password',
+			UserRole.PATIENT,
 		],
 	);
 
@@ -982,6 +1567,27 @@ async function seedClinicalTestData(db: DatabaseService) {
 			VALUES ($1, $2, 'Sara', 'Ahmed', 'Jenkins', 'FEMALE', '1992-06-14', '12345678901234', NULL, NULL, NULL)
 		`,
 		[PATIENT_ID, PATIENT_USER_ID],
+	);
+
+	await db.query(
+		`
+			INSERT INTO patients
+				(
+					id,
+					user_id,
+					first_name,
+					middle_name,
+					surname,
+					gender,
+					date_of_birth,
+					national_id,
+					blood_type,
+					weight_kg,
+					height_cm
+				)
+			VALUES ($1, $2, 'Mona', 'Samir', 'Hassan', 'FEMALE', '1991-01-10', '32109876543210', NULL, NULL, NULL)
+		`,
+		[OTHER_PATIENT_ID, OTHER_PATIENT_USER_ID],
 	);
 
 	await db.query(
