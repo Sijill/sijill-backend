@@ -82,6 +82,7 @@ export class PatientService {
 					diagnosedDate: row.diagnosedDate,
 				})),
 				emergencyContacts: identity.emergencyContacts.map((row) => ({
+					contactId: row.contactId,
 					contactName: row.contactName,
 					relationship: row.relationship,
 					phoneNumber: row.phoneNumber,

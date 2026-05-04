@@ -189,6 +189,7 @@ describe('ClinicalModule (e2e)', () => {
 		expect(response.body.chronicConditions).toHaveLength(1);
 		expect(response.body.emergencyContacts).toEqual([
 			expect.objectContaining({
+				contactId: CONTACT_ID,
 				contactName: 'Ahmed Jenkins',
 				relationship: 'SPOUSE',
 				phoneNumber: '+201012345678',
