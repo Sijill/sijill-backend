@@ -101,6 +101,64 @@ export class PatientService {
 		}
 	}
 
+	async listMedicalHistory(patientUserId: string) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const encounters = await this.patientRepository.listMedicalHistory(
+				patient.id,
+			);
+
+			return { encounters };
+		} catch (error) {
+			if (error instanceof NotFoundException) {
+				throw error;
+			}
+
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load patient medical history.',
+			);
+		}
+	}
+
+	async getMedicalHistoryEncounter(patientUserId: string, encounterId: string) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const encounter =
+				await this.patientRepository.getMedicalHistoryEncounter(
+					patient.id,
+					encounterId,
+				);
+
+			if (!encounter) {
+				throw new NotFoundException('Encounter not found.');
+			}
+
+			return { encounter };
+		} catch (error) {
+			if (error instanceof NotFoundException) {
+				throw error;
+			}
+
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load patient medical history encounter.',
+			);
+		}
+	}
+
 	async listActiveReminders(patientUserId: string) {
 		try {
 			const patient =

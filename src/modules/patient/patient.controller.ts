@@ -44,6 +44,22 @@ export class PatientController {
 		return await this.patientService.getMedicalIdentity(user.userId);
 	}
 
+	@Get('medical-history')
+	async listMedicalHistory(@CurrentUser() user: CurrentUserType) {
+		return await this.patientService.listMedicalHistory(user.userId);
+	}
+
+	@Get('medical-history/:encounterId')
+	async getMedicalHistoryEncounter(
+		@CurrentUser() user: CurrentUserType,
+		@Param('encounterId', ParseUUIDPipe) encounterId: string,
+	) {
+		return await this.patientService.getMedicalHistoryEncounter(
+			user.userId,
+			encounterId,
+		);
+	}
+
 	@Get('reminders')
 	async listReminders(@CurrentUser() user: CurrentUserType) {
 		return await this.patientService.listActiveReminders(user.userId);

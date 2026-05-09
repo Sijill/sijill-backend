@@ -198,6 +198,85 @@ describe('ClinicalModule (e2e)', () => {
 		]);
 	});
 
+	it('returns patient medical history summaries and encounter detail', async () => {
+		const historyResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/medical-history')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(historyResponse.body.encounters).toHaveLength(1);
+		expect(historyResponse.body.encounters[0]).toMatchObject({
+			encounterId: PAST_ENCOUNTER_ID,
+			doctorName: 'Khaled Mostafa Ali',
+			doctorSpeciality: 'Pulmonology',
+			encounterDate: '2026-03-10T09:30:00.000Z',
+			location: 'Cairo Medical Center, 12 Tahrir St, Cairo',
+			primaryDiagnosis: {
+				icd11Code: 'CA23',
+				icd11Title: 'Asthma',
+			},
+		});
+
+		const detailResponse = await request(app.getHttpServer())
+			.get(`/api/v1/patient/medical-history/${PAST_ENCOUNTER_ID}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(detailResponse.body.encounter).toMatchObject({
+			encounterId: PAST_ENCOUNTER_ID,
+			doctorName: 'Khaled Mostafa Ali',
+			doctorSpeciality: 'Pulmonology',
+			primaryDiagnosis: {
+				icd11Code: 'CA23',
+				icd11Title: 'Asthma',
+			},
+		});
+		expect(detailResponse.body.encounter.symptomsAndComplaints).toEqual([
+			{
+				title: 'Persistent dry cough',
+				description: 'Patient reports cough lasting 3 weeks, worse at night',
+			},
+		]);
+		expect(detailResponse.body.encounter.diagnoses).toEqual([
+			expect.objectContaining({
+				icd11Code: 'CA23',
+				icd11Title: 'Asthma',
+				clinicalDescription: 'Mild intermittent asthma',
+			}),
+			expect.objectContaining({
+				icd11Code: '5A11',
+				icd11Title: 'Type 2 diabetes mellitus',
+				clinicalDescription: 'Known chronic condition under treatment',
+			}),
+		]);
+		expect(detailResponse.body.encounter.prescribedMedications).toEqual([
+			expect.objectContaining({
+				medicationName: 'Salbutamol',
+				dosageAmount: 100,
+				dosageUnit: 'MCG',
+				form: 'INHALER',
+				frequency: 'Use 2 puffs when needed for shortness of breath',
+				instructions: 'Use 2 puffs when experiencing shortness of breath',
+				startDate: '2020-01-01',
+				endDate: '2099-12-31',
+			}),
+		]);
+	});
+
+	it('protects patient medical history from cross-patient access', async () => {
+		const otherPatientHistory = await request(app.getHttpServer())
+			.get('/api/v1/patient/medical-history')
+			.set('Authorization', `Bearer ${otherPatientJwt}`)
+			.expect(200);
+
+		expect(otherPatientHistory.body.encounters).toHaveLength(0);
+
+		await request(app.getHttpServer())
+			.get(`/api/v1/patient/medical-history/${PAST_ENCOUNTER_ID}`)
+			.set('Authorization', `Bearer ${otherPatientJwt}`)
+			.expect(404);
+	});
+
 	it('lists active diagnoses for the health journal with diagnosis ids', async () => {
 		const response = await request(app.getHttpServer())
 			.get('/api/v1/patient/health-journal/diagnoses')
@@ -820,7 +899,13 @@ describe('ClinicalModule (e2e)', () => {
 		);
 
 		expect(identityResponse.body.activeDiagnoses).toHaveLength(4);
-		expect(identityResponse.body.currentMedications).toHaveLength(3);
+		expect(identityResponse.body.currentMedications).toHaveLength(2);
+		expect(identityResponse.body.currentMedications).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ medicationName: 'Salbutamol' }),
+				expect.objectContaining({ medicationName: 'Amlodipine' }),
+			]),
+		);
 		expect(identityResponse.body.allergies).toHaveLength(3);
 		expect(identityResponse.body.chronicConditions).toHaveLength(2);
 		expect(historyResponse.body.data).toHaveLength(2);

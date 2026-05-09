@@ -94,6 +94,41 @@ export interface PatientHealthJournalSnapshotContext {
 	}>;
 }
 
+export interface PatientMedicalHistoryEncounterSummary {
+	encounterId: string;
+	doctorName: string | null;
+	doctorSpeciality: string | null;
+	encounterDate: Date | null;
+	location: string | null;
+	primaryDiagnosis: {
+		icd11Code: string | null;
+		icd11Title: string | null;
+	} | null;
+}
+
+export interface PatientMedicalHistoryEncounterDetail
+	extends PatientMedicalHistoryEncounterSummary {
+	symptomsAndComplaints: Array<{
+		title: string;
+		description: string | null;
+	}>;
+	diagnoses: Array<{
+		icd11Code: string | null;
+		icd11Title: string | null;
+		clinicalDescription: string | null;
+	}>;
+	prescribedMedications: Array<{
+		medicationName: string | null;
+		dosageAmount: number | null;
+		dosageUnit: string | null;
+		form: string | null;
+		frequency: string | null;
+		instructions: string | null;
+		startDate: string | null;
+		endDate: string | null;
+	}>;
+}
+
 @Injectable()
 export class PatientRepository {
 	constructor(
@@ -120,6 +155,138 @@ export class PatientRepository {
 		patientId: string,
 	): Promise<PatientMedicalIdentitySnapshot> {
 		return await loadPatientMedicalIdentity(this.databaseService, patientId);
+	}
+
+	async listMedicalHistory(
+		patientId: string,
+	): Promise<PatientMedicalHistoryEncounterSummary[]> {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					ce.id AS encounter_id,
+					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS doctor_name,
+					h.specialization AS doctor_speciality,
+					ce.encounter_date,
+					ce.location_address,
+					primary_diagnosis.icd11_code,
+					primary_diagnosis.icd11_title
+				FROM clinical_encounters ce
+				LEFT JOIN healthcare_providers h ON h.id = ce.hcp_id
+				LEFT JOIN LATERAL (
+					SELECT icd11_code, icd11_title
+					FROM diagnoses
+					WHERE encounter_id = ce.id
+					ORDER BY created_at ASC
+					LIMIT 1
+				) primary_diagnosis ON TRUE
+				WHERE ce.patient_id = $1
+				ORDER BY ce.encounter_date DESC NULLS LAST, ce.created_at DESC
+			`,
+			[patientId],
+		);
+
+		return rows.map((row) => this.mapMedicalHistorySummary(row));
+	}
+
+	async getMedicalHistoryEncounter(
+		patientId: string,
+		encounterId: string,
+	): Promise<PatientMedicalHistoryEncounterDetail | null> {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					ce.id AS encounter_id,
+					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS doctor_name,
+					h.specialization AS doctor_speciality,
+					ce.encounter_date,
+					ce.location_address,
+					primary_diagnosis.icd11_code,
+					primary_diagnosis.icd11_title
+				FROM clinical_encounters ce
+				LEFT JOIN healthcare_providers h ON h.id = ce.hcp_id
+				LEFT JOIN LATERAL (
+					SELECT icd11_code, icd11_title
+					FROM diagnoses
+					WHERE encounter_id = ce.id
+					ORDER BY created_at ASC
+					LIMIT 1
+				) primary_diagnosis ON TRUE
+				WHERE ce.id = $1
+					AND ce.patient_id = $2
+			`,
+			[encounterId, patientId],
+		);
+
+		const encounter = rows[0];
+		if (!encounter) {
+			return null;
+		}
+
+		const [symptomsResult, diagnosesResult, medicationsResult] =
+			await Promise.all([
+				this.databaseService.query(
+					`
+						SELECT title, description
+						FROM encounter_symptoms_complaints
+						WHERE encounter_id = $1
+						ORDER BY created_at ASC
+					`,
+					[encounterId],
+				),
+				this.databaseService.query(
+					`
+						SELECT
+							icd11_code,
+							icd11_title,
+							clinical_description
+						FROM diagnoses
+						WHERE encounter_id = $1
+						ORDER BY created_at ASC
+					`,
+					[encounterId],
+				),
+				this.databaseService.query(
+					`
+						SELECT
+							medication_name,
+							dosage_amount,
+							dosage_unit,
+							form,
+							frequency,
+							instructions,
+							start_date,
+							end_date
+						FROM medications
+						WHERE encounter_id = $1
+						ORDER BY created_at ASC
+					`,
+					[encounterId],
+				),
+			]);
+
+		return {
+			...this.mapMedicalHistorySummary(encounter),
+			symptomsAndComplaints: symptomsResult.rows.map((row) => ({
+				title: row.title,
+				description: row.description,
+			})),
+			diagnoses: diagnosesResult.rows.map((row) => ({
+				icd11Code: row.icd11_code,
+				icd11Title: row.icd11_title,
+				clinicalDescription: row.clinical_description,
+			})),
+			prescribedMedications: medicationsResult.rows.map((row) => ({
+				medicationName: row.medication_name,
+				dosageAmount:
+					row.dosage_amount !== null ? Number(row.dosage_amount) : null,
+				dosageUnit: row.dosage_unit,
+				form: row.form,
+				frequency: row.frequency,
+				instructions: row.instructions,
+				startDate: this.formatDateOnly(row.start_date),
+				endDate: this.formatDateOnly(row.end_date),
+			})),
+		};
 	}
 
 	async listActiveReminders(patientId: string) {
@@ -728,6 +895,40 @@ export class PatientRepository {
 			readAt: row.read_at,
 			createdAt: row.created_at,
 		};
+	}
+
+	private mapMedicalHistorySummary(
+		row: any,
+	): PatientMedicalHistoryEncounterSummary {
+		return {
+			encounterId: row.encounter_id,
+			doctorName: row.doctor_name,
+			doctorSpeciality: row.doctor_speciality,
+			encounterDate: row.encounter_date,
+			location: row.location_address,
+			primaryDiagnosis:
+				row.icd11_code || row.icd11_title
+					? {
+							icd11Code: row.icd11_code,
+							icd11Title: row.icd11_title,
+						}
+					: null,
+		};
+	}
+
+	private formatDateOnly(value: string | Date | null): string | null {
+		if (!value) {
+			return null;
+		}
+
+		if (typeof value === 'string') {
+			return value.slice(0, 10);
+		}
+
+		const year = value.getFullYear();
+		const month = `${value.getMonth() + 1}`.padStart(2, '0');
+		const day = `${value.getDate()}`.padStart(2, '0');
+		return `${year}-${month}-${day}`;
 	}
 
 	private async getActiveDiagnosisById(
