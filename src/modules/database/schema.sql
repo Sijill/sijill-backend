@@ -720,6 +720,7 @@ CREATE TABLE patient_permission_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    medical_order_id UUID REFERENCES medical_orders(id),
 
     code_hash VARCHAR(255) NOT NULL UNIQUE,
     entity_type user_role NOT NULL,

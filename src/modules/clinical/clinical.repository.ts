@@ -71,8 +71,451 @@ export class ClinicalRepository {
 		return rows[0] ?? null;
 	}
 
+	async getLaboratoryByUserId(userId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					id,
+					user_id,
+					lab_name
+				FROM laboratories
+				WHERE user_id = $1
+			`,
+			[userId],
+		);
+
+		return rows[0] ?? null;
+	}
+
+	async getImagingCenterByUserId(userId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					id,
+					user_id,
+					center_name
+				FROM imaging_centers
+				WHERE user_id = $1
+			`,
+			[userId],
+		);
+
+		return rows[0] ?? null;
+	}
+
+	async listActiveLabOrdersForPatient(patientId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					mo.id AS order_id,
+					mo.order_type,
+					mo.order_status,
+					mo.ordered_at,
+					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS ordered_by,
+					h.specialization AS ordered_by_specialization,
+					rt.name AS test_type,
+					rs.name AS specimen_type,
+					lo.priority,
+					lo.fasting_required,
+					lo.clinical_indication
+				FROM medical_orders mo
+				INNER JOIN lab_orders lo ON lo.medical_order_id = mo.id
+				LEFT JOIN healthcare_providers h ON h.id = mo.ordered_by_hcp_id
+				LEFT JOIN ref_test_types rt ON rt.id = lo.test_type_id
+				LEFT JOIN ref_specimen_types rs ON rs.id = lo.specimen_type_id
+				WHERE mo.patient_id = $1
+					AND mo.order_type = $2
+					AND mo.order_status IN ($3, $4)
+				ORDER BY mo.ordered_at DESC NULLS LAST, mo.created_at DESC
+			`,
+			[
+				patientId,
+				OrderType.LABORATORY,
+				OrderStatus.PENDING,
+				OrderStatus.IN_PROGRESS,
+			],
+		);
+
+		return rows;
+	}
+
+	async listActiveImagingOrdersForPatient(patientId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					mo.id AS order_id,
+					mo.order_type,
+					mo.order_status,
+					mo.ordered_at,
+					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS ordered_by,
+					h.specialization AS ordered_by_specialization,
+					ri.name AS imaging_type,
+					rb.name AS body_part,
+					io.priority,
+					io.contrast_used,
+					io.clinical_indication
+				FROM medical_orders mo
+				INNER JOIN imaging_orders io ON io.medical_order_id = mo.id
+				LEFT JOIN healthcare_providers h ON h.id = mo.ordered_by_hcp_id
+				LEFT JOIN ref_imaging_types ri ON ri.id = io.imaging_type_id
+				LEFT JOIN ref_body_parts rb ON rb.id = io.body_part_id
+				WHERE mo.patient_id = $1
+					AND mo.order_type = $2
+					AND mo.order_status IN ($3, $4)
+				ORDER BY mo.ordered_at DESC NULLS LAST, mo.created_at DESC
+			`,
+			[
+				patientId,
+				OrderType.IMAGING,
+				OrderStatus.PENDING,
+				OrderStatus.IN_PROGRESS,
+			],
+		);
+
+		return rows;
+	}
+
+	async getLabOrderForPatient(patientId: string, orderId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					mo.id AS order_id,
+					mo.order_type,
+					mo.order_status
+				FROM medical_orders mo
+				INNER JOIN lab_orders lo ON lo.medical_order_id = mo.id
+				WHERE mo.id = $1
+					AND mo.patient_id = $2
+					AND mo.order_type = $3
+			`,
+			[orderId, patientId, OrderType.LABORATORY],
+		);
+
+		return rows[0] ?? null;
+	}
+
+	async getImagingOrderForPatient(patientId: string, orderId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					mo.id AS order_id,
+					mo.order_type,
+					mo.order_status
+				FROM medical_orders mo
+				INNER JOIN imaging_orders io ON io.medical_order_id = mo.id
+				WHERE mo.id = $1
+					AND mo.patient_id = $2
+					AND mo.order_type = $3
+			`,
+			[orderId, patientId, OrderType.IMAGING],
+		);
+
+		return rows[0] ?? null;
+	}
+
+	async getLabOrderDetailsForPatient(patientId: string, orderId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					mo.id AS order_id,
+					mo.order_status,
+					mo.ordered_at,
+					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS ordered_by,
+					lo.priority,
+					lo.fasting_required,
+					lo.clinical_indication,
+					rt.name AS test_type,
+					rs.name AS specimen_type
+				FROM medical_orders mo
+				INNER JOIN lab_orders lo ON lo.medical_order_id = mo.id
+				LEFT JOIN healthcare_providers h ON h.id = mo.ordered_by_hcp_id
+				LEFT JOIN ref_test_types rt ON rt.id = lo.test_type_id
+				LEFT JOIN ref_specimen_types rs ON rs.id = lo.specimen_type_id
+				WHERE mo.id = $1
+					AND mo.patient_id = $2
+					AND mo.order_type = $3
+			`,
+			[orderId, patientId, OrderType.LABORATORY],
+		);
+
+		return rows[0] ?? null;
+	}
+
+	async getImagingOrderDetailsForPatient(patientId: string, orderId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					mo.id AS order_id,
+					mo.order_status,
+					mo.ordered_at,
+					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS ordered_by,
+					io.priority,
+					io.contrast_used,
+					io.clinical_indication,
+					ri.name AS imaging_type,
+					rb.name AS body_part
+				FROM medical_orders mo
+				INNER JOIN imaging_orders io ON io.medical_order_id = mo.id
+				LEFT JOIN healthcare_providers h ON h.id = mo.ordered_by_hcp_id
+				LEFT JOIN ref_imaging_types ri ON ri.id = io.imaging_type_id
+				LEFT JOIN ref_body_parts rb ON rb.id = io.body_part_id
+				WHERE mo.id = $1
+					AND mo.patient_id = $2
+					AND mo.order_type = $3
+			`,
+			[orderId, patientId, OrderType.IMAGING],
+		);
+
+		return rows[0] ?? null;
+	}
+
+	async submitLabResult(data: {
+		patientId: string;
+		orderId: string;
+		labId: string;
+		uploadedByUserId: string;
+		resultData: unknown;
+		additionalNotes?: string | null;
+		files: Express.Multer.File[];
+	}) {
+		const client = await this.databaseService.getClient();
+
+		try {
+			await client.query('BEGIN');
+
+			const orderResult = await client.query(
+				`
+					SELECT order_status
+					FROM medical_orders
+					WHERE id = $1
+						AND patient_id = $2
+						AND order_type = $3
+					FOR UPDATE
+				`,
+				[data.orderId, data.patientId, OrderType.LABORATORY],
+			);
+
+			if (orderResult.rows.length === 0) {
+				throw new NotFoundException('Lab order not found for this patient.');
+			}
+
+			const status: OrderStatus = orderResult.rows[0].order_status;
+			if (status === OrderStatus.COMPLETED || status === OrderStatus.CANCELLED) {
+				throw new ForbiddenException('This lab order is no longer active.');
+			}
+
+			const labResult = await client.query(
+				`
+					INSERT INTO lab_results
+						(order_id, patient_id, lab_id, result_data, additional_notes, uploaded_at, uploaded_by_user_id)
+					VALUES ($1, $2, $3, $4::jsonb, $5, NOW(), $6)
+					RETURNING id
+				`,
+				[
+					data.orderId,
+					data.patientId,
+					data.labId,
+					JSON.stringify(data.resultData ?? {}),
+					data.additionalNotes ?? null,
+					data.uploadedByUserId,
+				],
+			);
+
+			const labResultId = labResult.rows[0].id as string;
+
+			const documentIds: string[] = [];
+			for (const file of data.files) {
+				const documentResult = await client.query(
+					`
+						INSERT INTO documents
+							(user_id, file_type, file_name, mime_type, file_path, file_size_bytes, uploaded_at)
+						VALUES ($1, $2, $3, $4, $5, $6, NOW())
+						RETURNING id
+					`,
+					[
+						data.uploadedByUserId,
+						'LAB_RESULT',
+						file.filename,
+						file.mimetype,
+						file.path,
+						file.size,
+					],
+				);
+
+				documentIds.push(documentResult.rows[0].id);
+			}
+
+			for (const documentId of documentIds) {
+				await client.query(
+					`
+						INSERT INTO lab_result_documents
+							(lab_result_id, document_id)
+						VALUES ($1, $2)
+					`,
+					[labResultId, documentId],
+				);
+			}
+
+			await client.query(
+				`
+					UPDATE medical_orders
+					SET order_status = $2, completed_at = NOW(), updated_at = NOW()
+					WHERE id = $1
+				`,
+				[data.orderId, OrderStatus.COMPLETED],
+			);
+
+			await client.query(
+				`
+					UPDATE reminders
+					SET is_active = FALSE, updated_at = NOW()
+					WHERE medical_order_id = $1
+						AND reminder_type = $2
+						AND is_active = TRUE
+				`,
+				[data.orderId, ReminderType.MEDICAL_ORDER],
+			);
+
+			await client.query('COMMIT');
+
+			return {
+				resultId: labResultId,
+				documentIds,
+			};
+		} catch (error) {
+			await client.query('ROLLBACK');
+			throw error;
+		} finally {
+			client.release();
+		}
+	}
+
+	async submitImagingResult(data: {
+		patientId: string;
+		orderId: string;
+		imagingCenterId: string;
+		uploadedByUserId: string;
+		studyDescription: string;
+		findings: string;
+		files: Express.Multer.File[];
+	}) {
+		const client = await this.databaseService.getClient();
+
+		try {
+			await client.query('BEGIN');
+
+			const orderResult = await client.query(
+				`
+					SELECT order_status
+					FROM medical_orders
+					WHERE id = $1
+						AND patient_id = $2
+						AND order_type = $3
+					FOR UPDATE
+				`,
+				[data.orderId, data.patientId, OrderType.IMAGING],
+			);
+
+			if (orderResult.rows.length === 0) {
+				throw new NotFoundException(
+					'Imaging order not found for this patient.',
+				);
+			}
+
+			const status: OrderStatus = orderResult.rows[0].order_status;
+			if (status === OrderStatus.COMPLETED || status === OrderStatus.CANCELLED) {
+				throw new ForbiddenException('This imaging order is no longer active.');
+			}
+
+			const imagingResult = await client.query(
+				`
+					INSERT INTO imaging_results
+						(order_id, patient_id, imaging_center_id, study_description, findings, uploaded_at, uploaded_by_user_id)
+					VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+					RETURNING id
+				`,
+				[
+					data.orderId,
+					data.patientId,
+					data.imagingCenterId,
+					data.studyDescription,
+					data.findings,
+					data.uploadedByUserId,
+				],
+			);
+
+			const imagingResultId = imagingResult.rows[0].id as string;
+
+			const documentIds: string[] = [];
+			for (const file of data.files) {
+				const documentResult = await client.query(
+					`
+						INSERT INTO documents
+							(user_id, file_type, file_name, mime_type, file_path, file_size_bytes, uploaded_at)
+						VALUES ($1, $2, $3, $4, $5, $6, NOW())
+						RETURNING id
+					`,
+					[
+						data.uploadedByUserId,
+						'IMAGING_RESULT',
+						file.filename,
+						file.mimetype,
+						file.path,
+						file.size,
+					],
+				);
+
+				documentIds.push(documentResult.rows[0].id);
+			}
+
+			for (const documentId of documentIds) {
+				await client.query(
+					`
+						INSERT INTO imaging_result_documents
+							(imaging_result_id, document_id)
+						VALUES ($1, $2)
+					`,
+					[imagingResultId, documentId],
+				);
+			}
+
+			await client.query(
+				`
+					UPDATE medical_orders
+					SET order_status = $2, completed_at = NOW(), updated_at = NOW()
+					WHERE id = $1
+				`,
+				[data.orderId, OrderStatus.COMPLETED],
+			);
+
+			await client.query(
+				`
+					UPDATE reminders
+					SET is_active = FALSE, updated_at = NOW()
+					WHERE medical_order_id = $1
+						AND reminder_type = $2
+						AND is_active = TRUE
+				`,
+				[data.orderId, ReminderType.MEDICAL_ORDER],
+			);
+
+			await client.query('COMMIT');
+
+			return {
+				resultId: imagingResultId,
+				documentIds,
+			};
+		} catch (error) {
+			await client.query('ROLLBACK');
+			throw error;
+		} finally {
+			client.release();
+		}
+	}
+
 	async createPermissionToken(data: {
 		patientId: string;
+		medicalOrderId?: string | null;
 		codeHash: string;
 		entityType:
 			| UserRole.HEALTHCARE_PROVIDER
@@ -84,12 +527,13 @@ export class ClinicalRepository {
 		return await this.databaseService.query(
 			`
 				INSERT INTO patient_permission_tokens
-					(patient_id, code_hash, entity_type, access_type, expires_at)
-				VALUES ($1, $2, $3, $4, $5)
+					(patient_id, medical_order_id, code_hash, entity_type, access_type, expires_at)
+				VALUES ($1, $2, $3, $4, $5, $6)
 				RETURNING id, entity_type, access_type, expires_at
 			`,
 			[
 				data.patientId,
+				data.medicalOrderId ?? null,
 				data.codeHash,
 				data.entityType,
 				data.accessType,
@@ -111,6 +555,7 @@ export class ClinicalRepository {
 				)
 				SELECT
 					ppt.id AS token_id,
+					ppt.medical_order_id,
 					ppt.entity_type,
 					ppt.access_type,
 					ppt.expires_at,
@@ -155,6 +600,7 @@ export class ClinicalRepository {
 					SELECT
 						id,
 						patient_id,
+						medical_order_id,
 						status,
 						entity_type,
 						access_type,
@@ -223,6 +669,7 @@ export class ClinicalRepository {
 					SELECT
 						ppt.id,
 						ppt.patient_id,
+						ppt.medical_order_id,
 						ppt.entity_type,
 						ppt.access_type,
 						ppt.status,
@@ -337,6 +784,340 @@ export class ClinicalRepository {
 		}
 	}
 
+	async redeemLabPermissionToken(codeHash: string, labUserId: string) {
+		const client = await this.databaseService.getClient();
+
+		try {
+			await client.query('BEGIN');
+
+			const tokenResult = await client.query(
+				`
+					SELECT
+						ppt.id,
+						ppt.patient_id,
+						ppt.medical_order_id,
+						ppt.entity_type,
+						ppt.access_type,
+						ppt.status,
+						ppt.expires_at,
+						p.user_id AS patient_user_id,
+						TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.surname)) AS patient_full_name,
+						p.gender,
+						EXTRACT(YEAR FROM AGE(CURRENT_DATE, p.date_of_birth))::INT AS age,
+						mo.order_type AS medical_order_type,
+						mo.order_status AS medical_order_status
+					FROM patient_permission_tokens ppt
+					INNER JOIN patients p ON p.id = ppt.patient_id
+					LEFT JOIN medical_orders mo
+						ON mo.id = ppt.medical_order_id
+						AND mo.patient_id = ppt.patient_id
+					WHERE ppt.code_hash = $1
+					FOR UPDATE
+				`,
+				[codeHash],
+			);
+
+			if (tokenResult.rows.length === 0) {
+				throw new NotFoundException(
+					'No active token found matching this code.',
+				);
+			}
+
+			const token = tokenResult.rows[0];
+
+			if (token.entity_type !== UserRole.LAB) {
+				throw new ForbiddenException(
+					'This permission token is not valid for laboratories.',
+				);
+			}
+
+			if (!token.medical_order_id) {
+				throw new ForbiddenException(
+					'This permission token is not linked to a medical order.',
+				);
+			}
+
+			if (token.medical_order_type !== OrderType.LABORATORY) {
+				throw new ForbiddenException(
+					'This permission token is not valid for laboratory orders.',
+				);
+			}
+
+			if (
+				token.medical_order_status === OrderStatus.COMPLETED ||
+				token.medical_order_status === OrderStatus.CANCELLED
+			) {
+				throw new ForbiddenException(
+					'This medical order is no longer active.',
+				);
+			}
+
+			if (
+				token.status === AccessStatus.ACTIVE &&
+				new Date(token.expires_at) <= new Date()
+			) {
+				await client.query(
+					`
+						UPDATE patient_permission_tokens
+						SET status = $2
+						WHERE id = $1
+					`,
+					[token.id, AccessStatus.EXPIRED],
+				);
+				token.status = AccessStatus.EXPIRED;
+			}
+
+			if (token.status === AccessStatus.REVOKED) {
+				throw new ForbiddenException('Permission token has been revoked.');
+			}
+
+			if (token.status === AccessStatus.EXPIRED) {
+				throw new ForbiddenException('Permission token has expired.');
+			}
+
+			const labResult = await client.query(
+				`
+					SELECT id, lab_name
+					FROM laboratories
+					WHERE user_id = $1
+				`,
+				[labUserId],
+			);
+
+			if (labResult.rows.length === 0) {
+				throw new NotFoundException('Laboratory profile not found.');
+			}
+
+			const grantResult = await client.query(
+				`
+					INSERT INTO patient_access_grants
+						(permission_token_id, grantee_user_id)
+					VALUES ($1, $2)
+					ON CONFLICT (permission_token_id, grantee_user_id)
+					DO UPDATE SET revoked_at = NULL
+					RETURNING id
+				`,
+				[token.id, labUserId],
+			);
+
+			const lab = labResult.rows[0];
+			await this.insertNotification(client, {
+				userId: token.patient_user_id,
+				notificationType: NotificationType.SYSTEM,
+				title: 'Account Access',
+				message: `${lab.lab_name} accessed your account with ${this.formatAccessType(token.access_type)} access`,
+				scheduledFor: new Date(),
+			});
+
+			if (token.medical_order_status === OrderStatus.PENDING) {
+				await client.query(
+					`
+						UPDATE medical_orders
+						SET order_status = $2, updated_at = NOW()
+						WHERE id = $1
+							AND order_status = $3
+					`,
+					[
+						token.medical_order_id,
+						OrderStatus.IN_PROGRESS,
+						OrderStatus.PENDING,
+					],
+				);
+			}
+
+			await client.query('COMMIT');
+
+			return {
+				sessionId: grantResult.rows[0].id,
+				permissionTokenId: token.id,
+				patientId: token.patient_id,
+				patientUserId: token.patient_user_id,
+				medicalOrderId: token.medical_order_id,
+				accessType: token.access_type as AccessType,
+				expiresAt: token.expires_at,
+				labId: lab.id,
+				patient: {
+					patientId: token.patient_id,
+					fullName: token.patient_full_name,
+					gender: token.gender,
+					age: Number(token.age),
+				},
+			};
+		} catch (error) {
+			await client.query('ROLLBACK');
+			throw error;
+		} finally {
+			client.release();
+		}
+	}
+
+	async redeemImagingPermissionToken(codeHash: string, imagingUserId: string) {
+		const client = await this.databaseService.getClient();
+
+		try {
+			await client.query('BEGIN');
+
+			const tokenResult = await client.query(
+				`
+					SELECT
+						ppt.id,
+						ppt.patient_id,
+						ppt.medical_order_id,
+						ppt.entity_type,
+						ppt.access_type,
+						ppt.status,
+						ppt.expires_at,
+						p.user_id AS patient_user_id,
+						TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.surname)) AS patient_full_name,
+						p.gender,
+						EXTRACT(YEAR FROM AGE(CURRENT_DATE, p.date_of_birth))::INT AS age,
+						mo.order_type AS medical_order_type,
+						mo.order_status AS medical_order_status
+					FROM patient_permission_tokens ppt
+					INNER JOIN patients p ON p.id = ppt.patient_id
+					LEFT JOIN medical_orders mo
+						ON mo.id = ppt.medical_order_id
+						AND mo.patient_id = ppt.patient_id
+					WHERE ppt.code_hash = $1
+					FOR UPDATE
+				`,
+				[codeHash],
+			);
+
+			if (tokenResult.rows.length === 0) {
+				throw new NotFoundException(
+					'No active token found matching this code.',
+				);
+			}
+
+			const token = tokenResult.rows[0];
+
+			if (token.entity_type !== UserRole.IMAGING_CENTER) {
+				throw new ForbiddenException(
+					'This permission token is not valid for imaging centers.',
+				);
+			}
+
+			if (!token.medical_order_id) {
+				throw new ForbiddenException(
+					'This permission token is not linked to a medical order.',
+				);
+			}
+
+			if (token.medical_order_type !== OrderType.IMAGING) {
+				throw new ForbiddenException(
+					'This permission token is not valid for imaging orders.',
+				);
+			}
+
+			if (
+				token.medical_order_status === OrderStatus.COMPLETED ||
+				token.medical_order_status === OrderStatus.CANCELLED
+			) {
+				throw new ForbiddenException(
+					'This medical order is no longer active.',
+				);
+			}
+
+			if (
+				token.status === AccessStatus.ACTIVE &&
+				new Date(token.expires_at) <= new Date()
+			) {
+				await client.query(
+					`
+						UPDATE patient_permission_tokens
+						SET status = $2
+						WHERE id = $1
+					`,
+					[token.id, AccessStatus.EXPIRED],
+				);
+				token.status = AccessStatus.EXPIRED;
+			}
+
+			if (token.status === AccessStatus.REVOKED) {
+				throw new ForbiddenException('Permission token has been revoked.');
+			}
+
+			if (token.status === AccessStatus.EXPIRED) {
+				throw new ForbiddenException('Permission token has expired.');
+			}
+
+			const imagingResult = await client.query(
+				`
+					SELECT id, center_name
+					FROM imaging_centers
+					WHERE user_id = $1
+				`,
+				[imagingUserId],
+			);
+
+			if (imagingResult.rows.length === 0) {
+				throw new NotFoundException('Imaging center profile not found.');
+			}
+
+			const grantResult = await client.query(
+				`
+					INSERT INTO patient_access_grants
+						(permission_token_id, grantee_user_id)
+					VALUES ($1, $2)
+					ON CONFLICT (permission_token_id, grantee_user_id)
+					DO UPDATE SET revoked_at = NULL
+					RETURNING id
+				`,
+				[token.id, imagingUserId],
+			);
+
+			const center = imagingResult.rows[0];
+			await this.insertNotification(client, {
+				userId: token.patient_user_id,
+				notificationType: NotificationType.SYSTEM,
+				title: 'Account Access',
+				message: `${center.center_name} accessed your account with ${this.formatAccessType(token.access_type)} access`,
+				scheduledFor: new Date(),
+			});
+
+			if (token.medical_order_status === OrderStatus.PENDING) {
+				await client.query(
+					`
+						UPDATE medical_orders
+						SET order_status = $2, updated_at = NOW()
+						WHERE id = $1
+							AND order_status = $3
+					`,
+					[
+						token.medical_order_id,
+						OrderStatus.IN_PROGRESS,
+						OrderStatus.PENDING,
+					],
+				);
+			}
+
+			await client.query('COMMIT');
+
+			return {
+				sessionId: grantResult.rows[0].id,
+				permissionTokenId: token.id,
+				patientId: token.patient_id,
+				patientUserId: token.patient_user_id,
+				medicalOrderId: token.medical_order_id,
+				accessType: token.access_type as AccessType,
+				expiresAt: token.expires_at,
+				imagingCenterId: center.id,
+				patient: {
+					patientId: token.patient_id,
+					fullName: token.patient_full_name,
+					gender: token.gender,
+					age: Number(token.age),
+				},
+			};
+		} catch (error) {
+			await client.query('ROLLBACK');
+			throw error;
+		} finally {
+			client.release();
+		}
+	}
+
 	async validateClinicalSession(
 		sessionId: string,
 		hcpUserId: string,
@@ -406,6 +1187,189 @@ export class ClinicalRepository {
 			hcpId: session.hcp_id,
 			hcpUserId,
 			hcpFullName: session.hcp_full_name,
+			accessType: session.access_type as AccessType,
+			expiresAt: new Date(session.expires_at).toISOString(),
+		};
+	}
+
+	async validateLabSession(sessionId: string, labUserId: string): Promise<{
+		sessionId: string;
+		permissionTokenId: string;
+		patientId: string;
+		patientUserId: string;
+		medicalOrderId: string;
+		labId: string;
+		labUserId: string;
+		labName: string;
+		accessType: AccessType;
+		expiresAt: string;
+	}> {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					pag.id AS session_id,
+					pag.permission_token_id,
+					pag.revoked_at AS grant_revoked_at,
+					ppt.patient_id,
+					ppt.medical_order_id,
+					ppt.access_type,
+					ppt.status,
+					ppt.expires_at,
+					ppt.revoked_at AS token_revoked_at,
+					p.user_id AS patient_user_id,
+					l.id AS lab_id,
+					l.lab_name
+				FROM patient_access_grants pag
+				INNER JOIN patient_permission_tokens ppt
+					ON ppt.id = pag.permission_token_id
+				INNER JOIN patients p
+					ON p.id = ppt.patient_id
+				INNER JOIN laboratories l
+					ON l.user_id = $2
+				WHERE pag.id = $1
+					AND pag.grantee_user_id = $2
+					AND ppt.entity_type = $3
+			`,
+			[sessionId, labUserId, UserRole.LAB],
+		);
+
+		const session = rows[0];
+		if (!session) {
+			throw new NotFoundException('Lab session not found.');
+		}
+
+		if (session.grant_revoked_at || session.token_revoked_at) {
+			throw new ForbiddenException('Lab session has been revoked.');
+		}
+
+		if (session.status === AccessStatus.REVOKED) {
+			throw new ForbiddenException('Lab session has been revoked.');
+		}
+
+		if (new Date(session.expires_at) <= new Date()) {
+			await this.databaseService.query(
+				`
+					UPDATE patient_permission_tokens
+					SET status = $2
+					WHERE id = $1 AND status = $3
+				`,
+				[
+					session.permission_token_id,
+					AccessStatus.EXPIRED,
+					AccessStatus.ACTIVE,
+				],
+			);
+
+			throw new ForbiddenException('Lab session has expired.');
+		}
+
+		if (!session.medical_order_id) {
+			throw new ForbiddenException('Lab session is missing a medical order.');
+		}
+
+		return {
+			sessionId: session.session_id,
+			permissionTokenId: session.permission_token_id,
+			patientId: session.patient_id,
+			patientUserId: session.patient_user_id,
+			medicalOrderId: session.medical_order_id,
+			labId: session.lab_id,
+			labUserId,
+			labName: session.lab_name,
+			accessType: session.access_type as AccessType,
+			expiresAt: new Date(session.expires_at).toISOString(),
+		};
+	}
+
+	async validateImagingSession(
+		sessionId: string,
+		imagingUserId: string,
+	): Promise<{
+		sessionId: string;
+		permissionTokenId: string;
+		patientId: string;
+		patientUserId: string;
+		medicalOrderId: string;
+		imagingCenterId: string;
+		imagingUserId: string;
+		imagingCenterName: string;
+		accessType: AccessType;
+		expiresAt: string;
+	}> {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					pag.id AS session_id,
+					pag.permission_token_id,
+					pag.revoked_at AS grant_revoked_at,
+					ppt.patient_id,
+					ppt.medical_order_id,
+					ppt.access_type,
+					ppt.status,
+					ppt.expires_at,
+					ppt.revoked_at AS token_revoked_at,
+					p.user_id AS patient_user_id,
+					ic.id AS imaging_center_id,
+					ic.center_name
+				FROM patient_access_grants pag
+				INNER JOIN patient_permission_tokens ppt
+					ON ppt.id = pag.permission_token_id
+				INNER JOIN patients p
+					ON p.id = ppt.patient_id
+				INNER JOIN imaging_centers ic
+					ON ic.user_id = $2
+				WHERE pag.id = $1
+					AND pag.grantee_user_id = $2
+					AND ppt.entity_type = $3
+			`,
+			[sessionId, imagingUserId, UserRole.IMAGING_CENTER],
+		);
+
+		const session = rows[0];
+		if (!session) {
+			throw new NotFoundException('Imaging session not found.');
+		}
+
+		if (session.grant_revoked_at || session.token_revoked_at) {
+			throw new ForbiddenException('Imaging session has been revoked.');
+		}
+
+		if (session.status === AccessStatus.REVOKED) {
+			throw new ForbiddenException('Imaging session has been revoked.');
+		}
+
+		if (new Date(session.expires_at) <= new Date()) {
+			await this.databaseService.query(
+				`
+					UPDATE patient_permission_tokens
+					SET status = $2
+					WHERE id = $1 AND status = $3
+				`,
+				[
+					session.permission_token_id,
+					AccessStatus.EXPIRED,
+					AccessStatus.ACTIVE,
+				],
+			);
+
+			throw new ForbiddenException('Imaging session has expired.');
+		}
+
+		if (!session.medical_order_id) {
+			throw new ForbiddenException(
+				'Imaging session is missing a medical order.',
+			);
+		}
+
+		return {
+			sessionId: session.session_id,
+			permissionTokenId: session.permission_token_id,
+			patientId: session.patient_id,
+			patientUserId: session.patient_user_id,
+			medicalOrderId: session.medical_order_id,
+			imagingCenterId: session.imaging_center_id,
+			imagingUserId,
+			imagingCenterName: session.center_name,
 			accessType: session.access_type as AccessType,
 			expiresAt: new Date(session.expires_at).toISOString(),
 		};

@@ -50,6 +50,46 @@ export class ClinicalController {
 		return await this.clinicalService.listActivePermissionTokens(user.userId);
 	}
 
+	@Get('medical-orders/lab')
+	@UseGuards(AuthGuard, RoleGuard, StatusGuard)
+	@Roles(UserRole.PATIENT)
+	async listActiveLabOrders(@CurrentUser() user: CurrentUserType) {
+		return await this.clinicalService.listActiveLabOrders(user.userId);
+	}
+
+	@Get('medical-orders/imaging')
+	@UseGuards(AuthGuard, RoleGuard, StatusGuard)
+	@Roles(UserRole.PATIENT)
+	async listActiveImagingOrders(@CurrentUser() user: CurrentUserType) {
+		return await this.clinicalService.listActiveImagingOrders(user.userId);
+	}
+
+	@Post('medical-orders/:orderId/permission-tokens/lab')
+	@UseGuards(AuthGuard, RoleGuard, StatusGuard)
+	@Roles(UserRole.PATIENT)
+	async generateLabPermissionToken(
+		@CurrentUser() user: CurrentUserType,
+		@Param('orderId', ParseUUIDPipe) orderId: string,
+	) {
+		return await this.clinicalService.generateLabOrderPermissionToken(
+			user.userId,
+			orderId,
+		);
+	}
+
+	@Post('medical-orders/:orderId/permission-tokens/imaging')
+	@UseGuards(AuthGuard, RoleGuard, StatusGuard)
+	@Roles(UserRole.PATIENT)
+	async generateImagingPermissionToken(
+		@CurrentUser() user: CurrentUserType,
+		@Param('orderId', ParseUUIDPipe) orderId: string,
+	) {
+		return await this.clinicalService.generateImagingOrderPermissionToken(
+			user.userId,
+			orderId,
+		);
+	}
+
 	@Patch('permission-tokens/:tokenId/revoke')
 	@UseGuards(AuthGuard, RoleGuard, StatusGuard)
 	@Roles(UserRole.PATIENT)

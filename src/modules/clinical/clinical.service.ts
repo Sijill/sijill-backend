@@ -8,17 +8,23 @@ import {
 import { PinoLogger } from 'nestjs-pino';
 import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
-import { AccessStatus, AccessType, UserRole } from '@common/enums/db.enum';
+import { AccessStatus, AccessType, OrderStatus, UserRole } from '@common/enums/db.enum';
 import { generateOtp } from '@helpers/crypto.helper';
 import { ClinicalRepository } from './clinical.repository';
 import { GenerateTokenDto, ClinicalEntityType } from './dto/generate-token.dto';
 import { StartSessionDto } from './dto/start-session.dto';
 import { UpdateVitalsDto } from './dto/update-vitals.dto';
 import { CreateEncounterDto } from './dto/create-encounter.dto';
+import { UploadLabResultDto } from './dto/upload-lab-result.dto';
+import { UploadImagingResultDto } from './dto/upload-imaging-result.dto';
 import type {
 	ClinicalSessionContext,
 	ClinicalSessionTokenPayload,
 } from './types/clinical-session.type';
+import type {
+	ImagingSessionTokenPayload,
+	LabSessionTokenPayload,
+} from './types/diagnostic-session.type';
 
 @Injectable()
 export class ClinicalService {
@@ -31,6 +37,12 @@ export class ClinicalService {
 
 	async generatePermissionToken(patientUserId: string, dto: GenerateTokenDto) {
 		try {
+			if (dto.entityType !== ClinicalEntityType.HEALTHCARE_PROVIDER) {
+				throw new BadRequestException(
+					'Only healthcare provider tokens can be generated from this endpoint.',
+				);
+			}
+
 			const patient =
 				await this.clinicalRepository.getPatientByUserId(patientUserId);
 
@@ -83,6 +95,104 @@ export class ClinicalService {
 		}
 	}
 
+	async listActiveLabOrders(patientUserId: string) {
+		try {
+			const patient =
+				await this.clinicalRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const rows = await this.clinicalRepository.listActiveLabOrdersForPatient(
+				patient.id,
+			);
+
+			return {
+				orders: rows.map((row) => ({
+					orderId: row.order_id,
+					orderType: row.order_type,
+					orderStatus: row.order_status,
+					orderedAt: row.ordered_at,
+					orderedBy: row.ordered_by,
+					orderedBySpecialization: row.ordered_by_specialization,
+					labOrder: {
+						testType: row.test_type,
+						specimenType: row.specimen_type,
+						priority: row.priority,
+						fastingRequired: row.fasting_required,
+						clinicalIndication: row.clinical_indication,
+					},
+				})),
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load active laboratory orders.',
+			);
+		}
+	}
+
+	async listActiveImagingOrders(patientUserId: string) {
+		try {
+			const patient =
+				await this.clinicalRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const rows =
+				await this.clinicalRepository.listActiveImagingOrdersForPatient(
+					patient.id,
+				);
+
+			return {
+				orders: rows.map((row) => ({
+					orderId: row.order_id,
+					orderType: row.order_type,
+					orderStatus: row.order_status,
+					orderedAt: row.ordered_at,
+					orderedBy: row.ordered_by,
+					orderedBySpecialization: row.ordered_by_specialization,
+					imagingOrder: {
+						imagingType: row.imaging_type,
+						bodyPart: row.body_part,
+						priority: row.priority,
+						contrastUsed: row.contrast_used,
+						clinicalIndication: row.clinical_indication,
+					},
+				})),
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load active imaging orders.',
+			);
+		}
+	}
+
+	async generateLabOrderPermissionToken(patientUserId: string, orderId: string) {
+		return await this.generateDiagnosticOrderPermissionToken(
+			patientUserId,
+			orderId,
+			UserRole.LAB,
+		);
+	}
+
+	async generateImagingOrderPermissionToken(
+		patientUserId: string,
+		orderId: string,
+	) {
+		return await this.generateDiagnosticOrderPermissionToken(
+			patientUserId,
+			orderId,
+			UserRole.IMAGING_CENTER,
+		);
+	}
+
 	async listActivePermissionTokens(patientUserId: string) {
 		try {
 			const patient =
@@ -111,6 +221,89 @@ export class ClinicalService {
 			this.logger.error(error);
 			throw new InternalServerErrorException(
 				'Failed to load active permission tokens.',
+			);
+		}
+	}
+
+	private async generateDiagnosticOrderPermissionToken(
+		patientUserId: string,
+		orderId: string,
+		entityType: UserRole.LAB | UserRole.IMAGING_CENTER,
+	) {
+		try {
+			const patient =
+				await this.clinicalRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const order =
+				entityType === UserRole.LAB
+					? await this.clinicalRepository.getLabOrderForPatient(
+							patient.id,
+							orderId,
+						)
+					: await this.clinicalRepository.getImagingOrderForPatient(
+							patient.id,
+							orderId,
+						);
+
+			if (!order) {
+				throw new NotFoundException('Medical order not found for this patient.');
+			}
+
+			if (
+				order.order_status === OrderStatus.COMPLETED ||
+				order.order_status === OrderStatus.CANCELLED
+			) {
+				throw new ForbiddenException(
+					'Permission tokens can only be generated for active medical orders.',
+				);
+			}
+
+			const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+			for (let attempt = 0; attempt < 5; attempt += 1) {
+				const code = generateOtp(6);
+				const codeHash = this.hashPermissionCode(code);
+
+				try {
+					const result = await this.clinicalRepository.createPermissionToken({
+						patientId: patient.id,
+						medicalOrderId: orderId,
+						codeHash,
+						entityType,
+						accessType: AccessType.READ_WRITE,
+						expiresAt,
+					});
+
+					const row = result.rows[0];
+					return {
+						tokenId: row.id,
+						code,
+						entityType: row.entity_type,
+						accessType: row.access_type,
+						expiresAt: row.expires_at,
+						medicalOrderId: orderId,
+					};
+				} catch (error) {
+					if (error.code === '23505') {
+						continue;
+					}
+
+					throw error;
+				}
+			}
+
+			throw new InternalServerErrorException(
+				'Unable to generate a unique permission token.',
+			);
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to generate permission token.',
 			);
 		}
 	}
@@ -175,7 +368,7 @@ export class ClinicalService {
 				hcpUserId,
 			);
 
-			const clinicalSessionToken = this.signClinicalSessionToken(
+			const clinicalSessionToken = this.signSessionToken(
 				{
 					type: 'CLINICAL_SESSION',
 					sessionId: redeemed.sessionId,
@@ -200,6 +393,264 @@ export class ClinicalService {
 			this.logger.error(error);
 			throw new InternalServerErrorException(
 				'Failed to start clinical session.',
+			);
+		}
+	}
+
+	async startLabSession(labUserId: string, dto: StartSessionDto) {
+		try {
+			const lab = await this.clinicalRepository.getLaboratoryByUserId(labUserId);
+			if (!lab) {
+				throw new NotFoundException('Laboratory profile not found.');
+			}
+
+			const redeemed = await this.clinicalRepository.redeemLabPermissionToken(
+				this.hashPermissionCode(dto.code),
+				labUserId,
+			);
+
+			const labSessionToken = this.signSessionToken(
+				{
+					type: 'LAB_SESSION',
+					sessionId: redeemed.sessionId,
+					permissionTokenId: redeemed.permissionTokenId,
+					userId: labUserId,
+					patientId: redeemed.patientId,
+					medicalOrderId: redeemed.medicalOrderId,
+					accessType: redeemed.accessType,
+					role: UserRole.LAB,
+				},
+				new Date(redeemed.expiresAt),
+			);
+
+			return {
+				sessionId: redeemed.sessionId,
+				labSessionToken,
+				medicalOrderId: redeemed.medicalOrderId,
+				expiresAt: redeemed.expiresAt,
+				patient: redeemed.patient,
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to start lab session.');
+		}
+	}
+
+	async startImagingSession(imagingUserId: string, dto: StartSessionDto) {
+		try {
+			const center =
+				await this.clinicalRepository.getImagingCenterByUserId(imagingUserId);
+			if (!center) {
+				throw new NotFoundException('Imaging center profile not found.');
+			}
+
+			const redeemed =
+				await this.clinicalRepository.redeemImagingPermissionToken(
+					this.hashPermissionCode(dto.code),
+					imagingUserId,
+				);
+
+			const imagingSessionToken = this.signSessionToken(
+				{
+					type: 'IMAGING_SESSION',
+					sessionId: redeemed.sessionId,
+					permissionTokenId: redeemed.permissionTokenId,
+					userId: imagingUserId,
+					patientId: redeemed.patientId,
+					medicalOrderId: redeemed.medicalOrderId,
+					accessType: redeemed.accessType,
+					role: UserRole.IMAGING_CENTER,
+				},
+				new Date(redeemed.expiresAt),
+			);
+
+			return {
+				sessionId: redeemed.sessionId,
+				imagingSessionToken,
+				medicalOrderId: redeemed.medicalOrderId,
+				expiresAt: redeemed.expiresAt,
+				patient: redeemed.patient,
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to start imaging session.',
+			);
+		}
+	}
+
+	async getLabOrderView(payload: LabSessionTokenPayload) {
+		try {
+			const session = await this.assertValidLabSession(payload);
+
+			const [patientMedicalIdentity, order] = await Promise.all([
+				this.clinicalRepository.getMedicalIdentity(session.patientId),
+				this.clinicalRepository.getLabOrderDetailsForPatient(
+					session.patientId,
+					session.medicalOrderId,
+				),
+			]);
+
+			if (!order) {
+				throw new NotFoundException('Lab order not found for this patient.');
+			}
+
+			return {
+				patientMedicalIdentity,
+				labOrder: {
+					orderId: order.order_id,
+					orderStatus: order.order_status,
+					orderedAt: order.ordered_at,
+					orderedBy: order.ordered_by,
+					testType: order.test_type,
+					specimenType: order.specimen_type,
+					priority: order.priority,
+					fastingRequired: order.fasting_required,
+					clinicalIndication: order.clinical_indication,
+				},
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to load lab order view.');
+		}
+	}
+
+	async getImagingOrderView(payload: ImagingSessionTokenPayload) {
+		try {
+			const session = await this.assertValidImagingSession(payload);
+
+			const [patientMedicalIdentity, order] = await Promise.all([
+				this.clinicalRepository.getMedicalIdentity(session.patientId),
+				this.clinicalRepository.getImagingOrderDetailsForPatient(
+					session.patientId,
+					session.medicalOrderId,
+				),
+			]);
+
+			if (!order) {
+				throw new NotFoundException(
+					'Imaging order not found for this patient.',
+				);
+			}
+
+			return {
+				patientMedicalIdentity,
+				imagingOrder: {
+					orderId: order.order_id,
+					orderStatus: order.order_status,
+					orderedAt: order.ordered_at,
+					orderedBy: order.ordered_by,
+					imagingType: order.imaging_type,
+					bodyPart: order.body_part,
+					priority: order.priority,
+					contrastUsed: order.contrast_used,
+					clinicalIndication: order.clinical_indication,
+				},
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load imaging order view.',
+			);
+		}
+	}
+
+	async uploadLabResults(
+		payload: LabSessionTokenPayload,
+		dto: UploadLabResultDto,
+		files: Express.Multer.File[],
+	) {
+		try {
+			const session = await this.assertValidLabSession(payload);
+
+			if (!files || files.length === 0) {
+				throw new BadRequestException(
+					'At least one lab result attachment must be uploaded.',
+				);
+			}
+
+			let parsedResultData: unknown;
+			try {
+				parsedResultData = JSON.parse(dto.resultData);
+			} catch {
+				throw new BadRequestException('resultData must be valid JSON.');
+			}
+
+			if (
+				typeof parsedResultData !== 'object' ||
+				parsedResultData === null
+			) {
+				throw new BadRequestException(
+					'resultData must be a JSON object or array.',
+				);
+			}
+
+			const submission = await this.clinicalRepository.submitLabResult({
+				patientId: session.patientId,
+				orderId: session.medicalOrderId,
+				labId: session.labId,
+				uploadedByUserId: session.labUserId,
+				resultData: parsedResultData,
+				additionalNotes: dto.additionalNotes,
+				files,
+			});
+
+			return {
+				success: true,
+				message: 'Lab results submitted successfully.',
+				orderId: session.medicalOrderId,
+				resultId: submission.resultId,
+				documentIds: submission.documentIds,
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to submit lab results.',
+			);
+		}
+	}
+
+	async uploadImagingResults(
+		payload: ImagingSessionTokenPayload,
+		dto: UploadImagingResultDto,
+		files: Express.Multer.File[],
+	) {
+		try {
+			const session = await this.assertValidImagingSession(payload);
+
+			if (!files || files.length === 0) {
+				throw new BadRequestException(
+					'At least one imaging result attachment must be uploaded.',
+				);
+			}
+
+			const submission = await this.clinicalRepository.submitImagingResult({
+				patientId: session.patientId,
+				orderId: session.medicalOrderId,
+				imagingCenterId: session.imagingCenterId,
+				uploadedByUserId: session.imagingUserId,
+				studyDescription: dto.studyDescription,
+				findings: dto.findings,
+				files,
+			});
+
+			return {
+				success: true,
+				message: 'Imaging results submitted successfully.',
+				orderId: session.medicalOrderId,
+				resultId: submission.resultId,
+				documentIds: submission.documentIds,
+			};
+		} catch (error) {
+			this.rethrowKnown(error);
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to submit imaging results.',
 			);
 		}
 	}
@@ -408,6 +859,46 @@ export class ClinicalService {
 		return session;
 	}
 
+	private async assertValidLabSession(payload: LabSessionTokenPayload) {
+		const session = await this.clinicalRepository.validateLabSession(
+			payload.sessionId,
+			payload.userId,
+		);
+
+		if (
+			session.patientId !== payload.patientId ||
+			session.permissionTokenId !== payload.permissionTokenId ||
+			session.medicalOrderId !== payload.medicalOrderId ||
+			session.accessType !== payload.accessType
+		) {
+			throw new ForbiddenException(
+				'Lab session token does not match the current session state.',
+			);
+		}
+
+		return session;
+	}
+
+	private async assertValidImagingSession(payload: ImagingSessionTokenPayload) {
+		const session = await this.clinicalRepository.validateImagingSession(
+			payload.sessionId,
+			payload.userId,
+		);
+
+		if (
+			session.patientId !== payload.patientId ||
+			session.permissionTokenId !== payload.permissionTokenId ||
+			session.medicalOrderId !== payload.medicalOrderId ||
+			session.accessType !== payload.accessType
+		) {
+			throw new ForbiddenException(
+				'Imaging session token does not match the current session state.',
+			);
+		}
+
+		return session;
+	}
+
 	private resolveRequestedAccessType(dto: GenerateTokenDto) {
 		if (dto.entityType === ClinicalEntityType.HEALTHCARE_PROVIDER) {
 			if (!dto.accessType) {
@@ -470,10 +961,7 @@ export class ClinicalService {
 		}
 	}
 
-	private signClinicalSessionToken(
-		payload: ClinicalSessionTokenPayload,
-		expiresAt: Date,
-	) {
+	private signSessionToken(payload: Record<string, unknown>, expiresAt: Date) {
 		const secret =
 			process.env.JWT_CLINICAL_SECRET ||
 			process.env.JWT_ACCESS_SECRET ||
