@@ -838,6 +838,74 @@ INSERT INTO healthcare_providers (
     now(), now()
 );
 
+-- Lab User
+INSERT INTO users (
+    id, email, phone_number, password_hash, role,
+    account_status, email_verified, mfa_method,
+    verified_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000004',
+    'lab@gmail.com',
+    NULL,
+    '$2a$12$IPvROaRu/TcY7J679mr1C.rT4bSOEUWKJt.NnvR67/IyONOiSz0rq',
+    'LAB',
+    'VERIFIED',
+    true,
+    'EMAIL_OTP',
+    now(),
+    now(),
+    now()
+);
+
+INSERT INTO laboratories (
+    id, user_id,
+    lab_name, registration_number, administrator_full_name,
+    lab_address,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000012',
+    '00000000-0000-0000-0000-000000000004',
+    'Sijill Lab',
+    'LAB-2026-0001',
+    'Lab Administrator',
+    'Cairo, Egypt',
+    now(), now()
+);
+
+-- Imaging Center User
+INSERT INTO users (
+    id, email, phone_number, password_hash, role,
+    account_status, email_verified, mfa_method,
+    verified_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000005',
+    'imaging@gmail.com',
+    NULL,
+    '$2a$12$IPvROaRu/TcY7J679mr1C.rT4bSOEUWKJt.NnvR67/IyONOiSz0rq',
+    'IMAGING_CENTER',
+    'VERIFIED',
+    true,
+    'EMAIL_OTP',
+    now(),
+    now(),
+    now()
+);
+
+INSERT INTO imaging_centers (
+    id, user_id,
+    center_name, registration_number, administrator_full_name,
+    center_address,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000013',
+    '00000000-0000-0000-0000-000000000005',
+    'Sijill Imaging',
+    'IMG-2026-0001',
+    'Imaging Administrator',
+    'Cairo, Egypt',
+    now(), now()
+);
+
 -- -------------------------------------------------------------
 -- 1. Clinical Encounter (links patient to HCP, needed for FKs)
 -- -------------------------------------------------------------
