@@ -6,3 +6,4 @@ uploads
 .git
 .gitignore
 README.md
+tsconfig.build.tsbuildinfo
