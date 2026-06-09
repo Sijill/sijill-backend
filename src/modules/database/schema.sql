@@ -920,7 +920,7 @@ INSERT INTO clinical_encounters (
     '00000000-0000-0000-0000-000000000011',  -- Dr. Khaled
     '2025-11-10 09:00:00+00',
     'Cairo Medical Center, 12 Tahrir St, Cairo',
-    '2026-05-10 09:00:00+00',
+    '2026-06-15 09:00:00+00',
     'Routine follow-up for asthma and diabetes management.',
     now(), now()
 );
@@ -1079,4 +1079,177 @@ INSERT INTO patient_emergency_contacts (
     'SIBLING',
     FALSE,
     now(), now()
+);
+
+-- -------------------------------------------------------------
+-- 6. Medical Order
+--    - Seeded so MEDICAL_ORDER reminders have a real source
+-- -------------------------------------------------------------
+INSERT INTO medical_orders (
+    id, encounter_id, patient_id, ordered_by_hcp_id,
+    order_type, order_status,
+    ordered_at, completed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000070',
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000011',
+    'LABORATORY',
+    'PENDING',
+    '2026-06-10 10:00:00+00',
+    NULL,
+    now(), now()
+);
+
+INSERT INTO lab_orders (
+    medical_order_id, test_type_id, specimen_type_id,
+    fasting_required, priority, clinical_indication
+) VALUES (
+    '00000000-0000-0000-0000-000000000070',
+    10,
+    1,
+    TRUE,
+    'ROUTINE',
+    'Monitor HbA1c after the initial diabetes diagnosis and metformin start.'
+);
+
+-- -------------------------------------------------------------
+-- 7. Reminders
+--    - One for each reminder type
+-- -------------------------------------------------------------
+INSERT INTO reminders (
+    id, patient_id, reminder_type,
+    encounter_id, starts_at, appointment_at,
+    is_active, dismissed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000080',
+    '00000000-0000-0000-0000-000000000010',
+    'APPOINTMENT',
+    '00000000-0000-0000-0000-000000000020',
+    '2026-06-15',
+    '2026-06-15 09:00:00+00',
+    TRUE,
+    NULL,
+    now(), now()
+);
+
+INSERT INTO reminders (
+    id, patient_id, reminder_type,
+    medication_id, starts_at, ends_at,
+    reminder_time, custom_days,
+    is_active, dismissed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000081',
+    '00000000-0000-0000-0000-000000000010',
+    'MEDICATION',
+    '00000000-0000-0000-0000-000000000040',
+    '2025-11-10',
+    NULL,
+    '09:00:00',
+    NULL,
+    TRUE,
+    NULL,
+    now(), now()
+);
+
+INSERT INTO reminders (
+    id, patient_id, reminder_type,
+    medical_order_id, starts_at,
+    reminder_time, custom_days,
+    is_active, dismissed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000082',
+    '00000000-0000-0000-0000-000000000010',
+    'MEDICAL_ORDER',
+    '00000000-0000-0000-0000-000000000070',
+    '2026-06-10',
+    '09:00:00',
+    NULL,
+    TRUE,
+    NULL,
+    now(), now()
+);
+
+-- -------------------------------------------------------------
+-- 8. Notifications
+--    - Covers SYSTEM and REMINDER notification types
+-- -------------------------------------------------------------
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000090',
+    '00000000-0000-0000-0000-000000000002',
+    'SYSTEM',
+    'SENT',
+    'Account Access',
+    'Dr. Khaled Mohamed Mostafa accessed your account with read only access',
+    NULL,
+    '2026-06-09 10:00:00+00',
+    '2026-06-09 10:00:00+00',
+    NULL,
+    now()
+);
+
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000091',
+    '00000000-0000-0000-0000-000000000002',
+    'SYSTEM',
+    'SENT',
+    'New Encounter Added',
+    'Dr. Khaled Mohamed Mostafa added a new encounter to your medical history',
+    NULL,
+    '2026-06-09 10:05:00+00',
+    '2026-06-09 10:05:00+00',
+    NULL,
+    now()
+);
+
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000092',
+    '00000000-0000-0000-0000-000000000002',
+    'REMINDER',
+    'PENDING',
+    'Upcoming Appointment',
+    'You have an appointment with Dr. Khaled Mohamed Mostafa tomorrow at 9:00 AM',
+    '00000000-0000-0000-0000-000000000080',
+    '2026-06-14 09:00:00+00',
+    NULL,
+    NULL,
+    now()
+);
+
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000093',
+    '00000000-0000-0000-0000-000000000002',
+    'REMINDER',
+    'PENDING',
+    'Appointment Soon',
+    'Your appointment with Dr. Khaled Mohamed Mostafa is in 1 hour',
+    '00000000-0000-0000-0000-000000000080',
+    '2026-06-15 08:00:00+00',
+    NULL,
+    NULL,
+    now()
 );
