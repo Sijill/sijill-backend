@@ -1222,6 +1222,82 @@ INSERT INTO notifications (
     scheduled_for, sent_at, read_at,
     created_at
 ) VALUES (
+    '00000000-0000-0000-0000-000000000096',
+    '00000000-0000-0000-0000-000000000002',
+    'SYSTEM',
+    'PENDING',
+    'Account Access',
+    'Dr. Khaled Mohamed Mostafa accessed your account with read only access',
+    NULL,
+    '2026-06-10 08:00:00+00',
+    NULL,
+    NULL,
+    now()
+);
+
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000097',
+    '00000000-0000-0000-0000-000000000002',
+    'SYSTEM',
+    'PENDING',
+    'New Encounter Added',
+    'Dr. Khaled Mohamed Mostafa added a new encounter to your medical history',
+    NULL,
+    '2026-06-10 08:05:00+00',
+    NULL,
+    NULL,
+    now()
+);
+
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000094',
+    '00000000-0000-0000-0000-000000000002',
+    'REMINDER',
+    'PENDING',
+    'Upcoming Appointment',
+    'You have an appointment with Dr. Khaled Mohamed Mostafa tomorrow at 9:00 AM',
+    '00000000-0000-0000-0000-000000000081',
+    '2026-06-10 09:00:00+00',
+    NULL,
+    NULL,
+    now()
+);
+
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000095',
+    '00000000-0000-0000-0000-000000000002',
+    'REMINDER',
+    'PENDING',
+    'Appointment Soon',
+    'Your appointment with Dr. Khaled Mohamed Mostafa is in 1 hour',
+    '00000000-0000-0000-0000-000000000080',
+    '2026-06-10 11:00:00+00',
+    NULL,
+    NULL,
+    now()
+);
+
+INSERT INTO notifications (
+    id, user_id, notification_type, status,
+    title, message, reminder_id,
+    scheduled_for, sent_at, read_at,
+    created_at
+) VALUES (
     '00000000-0000-0000-0000-000000000092',
     '00000000-0000-0000-0000-000000000002',
     'REMINDER',
