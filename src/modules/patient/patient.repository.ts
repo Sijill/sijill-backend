@@ -5,6 +5,7 @@ import {
 	DiagnosisStatus,
 	NotificationStatus,
 	OrderStatus,
+	OrderType,
 	ReminderType,
 } from '@common/enums/db.enum';
 import { PoolClient } from 'pg';
@@ -127,6 +128,18 @@ export interface PatientMedicalHistoryEncounterDetail
 		startDate: string | null;
 		endDate: string | null;
 	}>;
+}
+
+export interface PatientHomeReminderCounters {
+	medicationReminders: number;
+	upcomingAppointments: number;
+	pendingTestOrders: number;
+}
+
+export interface PatientHomeScheduleItem {
+	time: string;
+	what: string;
+	kind: ReminderType;
 }
 
 @Injectable()
@@ -364,6 +377,151 @@ export class PatientRepository {
 				),
 			},
 		};
+	}
+
+	async getHomeReminderCounters(patientId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					COUNT(*) FILTER (
+						WHERE r.reminder_type = $2
+							AND r.is_active = TRUE
+							AND r.starts_at <= CURRENT_DATE
+							AND (r.ends_at IS NULL OR r.ends_at >= CURRENT_DATE)
+					)::INT AS medication_reminders,
+					COUNT(*) FILTER (
+						WHERE r.reminder_type = $3
+							AND r.is_active = TRUE
+							AND r.appointment_at >= NOW()
+					)::INT AS upcoming_appointments,
+					COUNT(*) FILTER (
+						WHERE r.reminder_type = $4
+							AND r.is_active = TRUE
+							AND mo.order_status IN ($5, $6)
+					)::INT AS pending_test_orders
+				FROM reminders r
+				LEFT JOIN medical_orders mo ON mo.id = r.medical_order_id
+				WHERE r.patient_id = $1
+			`,
+			[
+				patientId,
+				ReminderType.MEDICATION,
+				ReminderType.APPOINTMENT,
+				ReminderType.MEDICAL_ORDER,
+				OrderStatus.PENDING,
+				OrderStatus.IN_PROGRESS,
+			],
+		);
+
+		const counters = rows[0] ?? {
+			medication_reminders: 0,
+			upcoming_appointments: 0,
+			pending_test_orders: 0,
+		};
+
+		return {
+			medicationReminders: Number(counters.medication_reminders ?? 0),
+			upcomingAppointments: Number(counters.upcoming_appointments ?? 0),
+			pendingTestOrders: Number(counters.pending_test_orders ?? 0),
+		};
+	}
+
+	async listTodaySchedule(patientId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					schedule_item_id,
+					kind,
+					time_label,
+					what
+				FROM (
+					SELECT
+						r.id AS schedule_item_id,
+						r.created_at,
+						1 AS kind_sort,
+						r.reminder_type AS kind,
+						TO_CHAR(r.reminder_time, 'HH12:MI AM') AS time_label,
+						m.medication_name AS what,
+						(CURRENT_DATE::timestamp + r.reminder_time) AS scheduled_at
+					FROM reminders r
+					INNER JOIN medications m ON m.id = r.medication_id
+					WHERE r.patient_id = $1
+						AND r.reminder_type = $2
+						AND r.is_active = TRUE
+						AND r.starts_at <= CURRENT_DATE
+						AND (r.ends_at IS NULL OR r.ends_at >= CURRENT_DATE)
+
+					UNION ALL
+
+					SELECT
+						r.id AS schedule_item_id,
+						r.created_at,
+						2 AS kind_sort,
+						r.reminder_type AS kind,
+						TO_CHAR(r.appointment_at, 'HH12:MI AM') AS time_label,
+						CASE
+							WHEN NULLIF(TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)), '') IS NOT NULL
+								THEN CONCAT(
+									'Appointment with Dr. ',
+									TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname))
+								)
+							ELSE 'Appointment'
+						END AS what,
+						r.appointment_at AS scheduled_at
+					FROM reminders r
+					INNER JOIN clinical_encounters ce ON ce.id = r.encounter_id
+					LEFT JOIN healthcare_providers h ON h.id = ce.hcp_id
+					WHERE r.patient_id = $1
+						AND r.reminder_type = $3
+						AND r.is_active = TRUE
+						AND r.appointment_at::date = CURRENT_DATE
+
+					UNION ALL
+
+					SELECT
+						r.id AS schedule_item_id,
+						r.created_at,
+						3 AS kind_sort,
+						r.reminder_type AS kind,
+						TO_CHAR(r.reminder_time, 'HH12:MI AM') AS time_label,
+						CASE
+							WHEN mo.order_type = $7
+								THEN CONCAT('Lab: ', COALESCE(rt.name, 'Test Order'))
+							WHEN mo.order_type = $8
+								THEN CONCAT('Imaging: ', COALESCE(ri.name, 'Test Order'))
+							ELSE COALESCE(rt.name, ri.name, 'Test Order')
+						END AS what,
+						(CURRENT_DATE::timestamp + r.reminder_time) AS scheduled_at
+					FROM reminders r
+					INNER JOIN medical_orders mo ON mo.id = r.medical_order_id
+					LEFT JOIN lab_orders lo ON lo.medical_order_id = mo.id
+					LEFT JOIN ref_test_types rt ON rt.id = lo.test_type_id
+					LEFT JOIN imaging_orders io ON io.medical_order_id = mo.id
+					LEFT JOIN ref_imaging_types ri ON ri.id = io.imaging_type_id
+					WHERE r.patient_id = $1
+						AND r.reminder_type = $4
+						AND r.is_active = TRUE
+						AND mo.order_status IN ($5, $6)
+				) schedule_items
+				ORDER BY scheduled_at ASC, kind_sort ASC, created_at ASC
+			`,
+			[
+				patientId,
+				ReminderType.MEDICATION,
+				ReminderType.APPOINTMENT,
+				ReminderType.MEDICAL_ORDER,
+				OrderStatus.PENDING,
+				OrderStatus.IN_PROGRESS,
+				OrderType.LABORATORY,
+				OrderType.IMAGING,
+			],
+		);
+
+		return rows.map((row) => ({
+			time: row.time_label,
+			what: row.what,
+			kind: row.kind,
+		}));
 	}
 
 	async getReminderForPatient(patientId: string, reminderId: string) {

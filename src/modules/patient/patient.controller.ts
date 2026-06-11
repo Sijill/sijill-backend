@@ -70,6 +70,16 @@ export class PatientController {
 		return await this.patientService.listActiveReminders(user.userId);
 	}
 
+	@Get('home/reminders/counters')
+	async getHomeReminderCounters(@CurrentUser() user: CurrentUserType) {
+		return await this.patientService.getHomeReminderCounters(user.userId);
+	}
+
+	@Get('home/today-schedule')
+	async getTodaySchedule(@CurrentUser() user: CurrentUserType) {
+		return await this.patientService.getTodaySchedule(user.userId);
+	}
+
 	@Patch('reminders/:reminderId')
 	async updateReminder(
 		@CurrentUser() user: CurrentUserType,

@@ -1117,7 +1117,7 @@ describe('ClinicalModule (e2e)', () => {
 				)
 			`,
 		);
-		expect(medicationNotificationCount.rows[0].total).toBe(0);
+		expect(medicationNotificationCount.rows[0].total).toBe(1);
 	});
 
 	it('returns active reminders grouped for Flutter scheduling through both reminder endpoints', async () => {
@@ -1194,6 +1194,55 @@ describe('ClinicalModule (e2e)', () => {
 		);
 	});
 
+	it('returns the home reminder counters and today schedule', async () => {
+		const countersResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/home/reminders/counters')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(countersResponse.body.counters).toMatchObject({
+			medicationReminders: 1,
+			upcomingAppointments: 0,
+			pendingTestOrders: 4,
+		});
+
+		const scheduleResponse = await request(app.getHttpServer())
+			.get('/api/v1/patient/home/today-schedule')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(scheduleResponse.body.schedule).toHaveLength(5);
+		expect(scheduleResponse.body.schedule).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					time: '09:00 AM',
+					what: 'Amlodipine',
+					kind: 'MEDICATION',
+				}),
+				expect.objectContaining({
+					time: '09:00 AM',
+					what: 'Lab: COMPLETE_BLOOD_COUNT',
+					kind: 'MEDICAL_ORDER',
+				}),
+				expect.objectContaining({
+					time: '09:00 AM',
+					what: 'Lab: BASIC_METABOLIC_PANEL',
+					kind: 'MEDICAL_ORDER',
+				}),
+				expect.objectContaining({
+					time: '09:00 AM',
+					what: 'Imaging: MRI',
+					kind: 'MEDICAL_ORDER',
+				}),
+				expect.objectContaining({
+					time: '09:00 AM',
+					what: 'Imaging: X-RAY',
+					kind: 'MEDICAL_ORDER',
+				}),
+			]),
+		);
+	});
+
 	it('allows only medication customization and medical-order dismissal', async () => {
 		const remindersResponse = await request(app.getHttpServer())
 			.get('/api/v1/patient/reminders')
@@ -1260,6 +1309,11 @@ describe('ClinicalModule (e2e)', () => {
 			.patch(`/api/v1/patient/reminders/${orderReminder.reminderId}`)
 			.set('Authorization', `Bearer ${patientJwt}`)
 			.send({ is_active: true })
+			.expect(400);
+
+		await request(app.getHttpServer())
+			.patch(`/api/v1/patient/reminders/${medicationReminder.reminderId}`)
+			.set('Authorization', `Bearer ${patientJwt}`)
 			.expect(400);
 
 		await request(app.getHttpServer())

@@ -15,6 +15,10 @@ import * as path from 'path';
 import type { Response } from 'express';
 import { AddEmergencyContactDto } from './dto/add-emergency-contact.dto';
 import { UpdateReminderDto } from './dto/update-reminder.dto';
+import type {
+	PatientHomeReminderCounters,
+	PatientHomeScheduleItem,
+} from './patient.repository';
 
 @Injectable()
 export class PatientService {
@@ -178,12 +182,70 @@ export class PatientService {
 		}
 	}
 
+	async getHomeReminderCounters(
+		patientUserId: string,
+	): Promise<{ counters: PatientHomeReminderCounters }> {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const counters = await this.patientRepository.getHomeReminderCounters(
+				patient.id,
+			);
+
+			return { counters };
+		} catch (error) {
+			if (error instanceof NotFoundException) {
+				throw error;
+			}
+
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load reminder counters.',
+			);
+		}
+	}
+
+	async getTodaySchedule(
+		patientUserId: string,
+	): Promise<{ schedule: PatientHomeScheduleItem[] }> {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const schedule = await this.patientRepository.listTodaySchedule(
+				patient.id,
+			);
+
+			return { schedule };
+		} catch (error) {
+			if (error instanceof NotFoundException) {
+				throw error;
+			}
+
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Failed to load today schedule.',
+			);
+		}
+	}
+
 	async updateReminder(
 		patientUserId: string,
 		reminderId: string,
-		dto: UpdateReminderDto,
+		dto: UpdateReminderDto | undefined,
 	) {
 		try {
+			const reminderUpdate = dto ?? {};
+
 			const patient =
 				await this.patientRepository.getPatientByUserId(patientUserId);
 
@@ -200,12 +262,14 @@ export class PatientService {
 				throw new NotFoundException('Reminder not found.');
 			}
 
-			const reminderTime = dto.reminder_time ?? dto.reminderTime;
-			const customDays = dto.custom_days ?? dto.customDays;
-			const isActive = dto.is_active ?? dto.isActive;
+			const reminderTime =
+				reminderUpdate.reminder_time ?? reminderUpdate.reminderTime;
+			const customDays = reminderUpdate.custom_days ?? reminderUpdate.customDays;
+			const isActive = reminderUpdate.is_active ?? reminderUpdate.isActive;
 			const hasTime = reminderTime !== undefined;
 			const hasCustomDays =
-				dto.custom_days !== undefined || dto.customDays !== undefined;
+				reminderUpdate.custom_days !== undefined ||
+				reminderUpdate.customDays !== undefined;
 			const hasActive = isActive !== undefined;
 
 			if (!hasTime && !hasCustomDays && !hasActive) {
