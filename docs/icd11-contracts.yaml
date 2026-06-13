@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: Sijill - ICD-11 Search API Contract
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.sijill.gov/api/v1
+    description: Production server
+
+tags:
+  - name: icd
+    description: ICD-11 diagnosis search and suggestion
+
+paths:
+  /icd/search:
+    get:
+      tags:
+        - icd
+      summary: Search ICD-11 diagnoses
+      description: |
+        Returns up to 6 matching ICD-11 MMS diagnosis suggestions for the
+        given query. Powered by the locally deployed WHO ICD-11 API container.
+
+        Used to assist healthcare providers in selecting valid ICD-11 codes
+        and titles when documenting a clinical encounter. The doctor types
+        a term, the frontend calls this endpoint, and shows a suggestions
+        dropdown. The selected code and title then populate the `icd11Code`
+        and `icd11Title` fields in the encounter submission.
+
+        No authentication is required for this endpoint.
+      operationId: searchIcd11Diagnoses
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: The search term to look up. Minimum 2 characters.
+          schema:
+            type: string
+            minLength: 2
+            example: asthma
+      responses:
+        "200":
+          description: A list of up to 6 matching ICD-11 diagnoses.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IcdSearchResult"
+              example:
+                - code: "CA23"
+                  title: "Asthma"
+                - code: "CA23.0"
+                  title: "Allergic asthma"
+                - code: "CA23.3"
+                  title: "Unspecified asthma"
+                - code: "CA23.31"
+                  title: "Unspecified asthma with status asthmaticus"
+                - code: "CA23.32"
+                  title: "Unspecified asthma, uncomplicated"
+                - code: "CA23.1"
+                  title: "Non-allergic asthma"
+        "400":
+          description: Query is missing or shorter than 2 characters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestError"
+        "500":
+          description: Failed to reach the local ICD-11 API container.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerError"
+
+components:
+  schemas:
+    IcdSearchResult:
+      type: object
+      properties:
+        code:
+          type: string
+          description: The ICD-11 MMS code for the diagnosis.
+          example: "CA23"
+        title:
+          type: string
+          description: The official ICD-11 title for the diagnosis.
+          example: "Asthma"
+
+    BadRequestError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: "Query must be at least 2 characters."
+        error:
+          type: string
+          example: "Bad Request"
+
+    InternalServerError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 500
+        message:
+          type: string
+          example: "Failed to reach ICD API."
+        error:
+          type: string
+          example: "Internal Server Error"

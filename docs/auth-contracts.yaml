@@ -1,0 +1,1135 @@
+openapi: 3.0.3
+info:
+  title: Sijill - Auth Module API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.sijill.gov/api/v1
+    description: Production server
+tags:
+  - name: auth
+    description: Authentication endpoints
+  - name: registration
+    description: User registration endpoints
+  - name: login
+    description: User login and session management
+  - name: password-reset
+    description: Password reset functionality
+paths:
+  /auth/register:
+    post:
+      tags:
+        - auth
+        - registration
+      summary: Register a new user
+      description: |
+        Register a new user with one of four roles. This is a multi-part form data endpoint.
+
+        **Supported Roles:**
+        - PATIENT
+        - HEALTHCARE_PROVIDER
+        - LAB
+        - IMAGING_CENTER
+
+        Each role has specific required fields and documents.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/PatientRegistrationRequest'
+                - $ref: '#/components/schemas/HcpRegistrationRequest'
+                - $ref: '#/components/schemas/LabRegistrationRequest'
+                - $ref: '#/components/schemas/ImagingRegistrationRequest'
+            encoding:
+              nationalIdFront:
+                contentType: image/jpeg, image/png, application/pdf
+              nationalIdBack:
+                contentType: image/jpeg, image/png, application/pdf
+              selfieWithId:
+                contentType: image/jpeg, image/png
+              medicalLicenseDocument:
+                contentType: image/jpeg, image/png, application/pdf
+              workplaceDocument:
+                contentType: image/jpeg, image/png, application/pdf
+              workplaceLogo:
+                contentType: image/jpeg, image/png
+              accreditationDocument:
+                contentType: image/jpeg, image/png, application/pdf
+              proofOfAddress:
+                contentType: image/jpeg, image/png, application/pdf
+              labLogo:
+                contentType: image/jpeg, image/png
+              centerLogo:
+                contentType: image/jpeg, image/png
+      responses:
+        '201':
+          description: Registration initiated successfully. OTP sent to email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationInitResponse'
+        '400':
+          description: |
+            Bad Request. Possible reasons:
+            - Invalid role
+            - Missing required files for role
+            - Validation errors in request body
+            - Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '500':
+          description: Internal server error during registration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/register/resend-otp:
+    post:
+      tags:
+        - auth
+        - registration
+      summary: Resend registration OTP
+      description: Resend OTP for registration verification
+      operationId: resendRegistrationOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterResendOtpDto'
+      responses:
+        '200':
+          description: OTP resent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResendOtpResponse'
+        '400':
+          description: Invalid or expired registration session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '404':
+          description: Registration session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/register/verify-otp:
+    post:
+      tags:
+        - auth
+        - registration
+      summary: Verify registration OTP
+      description: Verify OTP and complete registration process
+      operationId: verifyRegistrationOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterVerifyOtpDto'
+      responses:
+        '200':
+          description: Registration completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationCompleteResponse'
+        '400':
+          description: |
+            Bad Request. Possible reasons:
+            - Invalid OTP
+            - OTP already used
+            - OTP expired
+            - Registration session expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '404':
+          description: Registration session or OTP not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/login:
+    post:
+      tags:
+        - auth
+        - login
+      summary: Initiate user login
+      description: Start login process, sends OTP to user's email for verification
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDto'
+      responses:
+        '200':
+          description: Login initiated successfully. OTP sent to email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginInitResponse'
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: |
+            Forbidden. Possible reasons:
+            - Account pending approval
+            - Account suspended
+            - Account deactivated
+            - Email not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/login/resend-otp:
+    post:
+      tags:
+        - auth
+        - login
+      summary: Resend login OTP
+      description: Resend OTP for login verification
+      operationId: resendLoginOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginResendOtpDto'
+      responses:
+        '200':
+          description: OTP resent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResendOtpResponse'
+        '400':
+          description: Invalid or expired login session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '404':
+          description: Login session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/login/verify-otp:
+    post:
+      tags:
+        - auth
+        - login
+      summary: Verify login OTP
+      description: |
+        Verify login OTP and complete authentication.
+
+        **Platform-specific behavior:**
+        - `mobile`: Returns refresh token in response body
+        - `web`: Sets refresh token as HTTP-only cookie
+      operationId: verifyLoginOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginVerifyOtpDto'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginCompleteResponse'
+        '400':
+          description: |
+            Bad Request. Possible reasons:
+            - Invalid OTP
+            - OTP already used
+            - OTP expired
+            - Login session expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '404':
+          description: Login session or OTP not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/refresh:
+    post:
+      tags:
+        - auth
+        - login
+      summary: Refresh access token
+      description: |
+        Refresh access token using refresh token.
+
+        **Platform-specific behavior:**
+        - `mobile`: Refresh token passed in request body
+        - `web`: Refresh token read from HTTP-only cookie
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenDto'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        '400':
+          description: Refresh token not found (mobile) or bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '401':
+          description: |
+            Unauthorized. Possible reasons:
+            - Invalid refresh token
+            - Refresh token revoked
+            - Refresh token expired
+            - Refresh token not found (web)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/logout:
+    post:
+      tags:
+        - auth
+        - login
+      summary: Logout user
+      description: |
+        Logout user and revoke refresh token.
+
+        **Platform-specific behavior:**
+        - `mobile`: Refresh token passed in request body
+        - `web`: Refresh token read from HTTP-only cookie
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutDto'
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+        '400':
+          description: Refresh token not found (mobile) or bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '401':
+          description: Refresh token not found (web)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/password-reset:
+    post:
+      tags:
+        - auth
+        - password-reset
+      summary: Initiate password reset
+      description: Start password reset process, sends OTP to email
+      operationId: initiatePasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetInitiateDto'
+      responses:
+        '200':
+          description: Password reset initiated. OTP sent to email if account exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetInitiateResponse'
+        '403':
+          description: |
+            Forbidden. Possible reasons:
+            - Account suspended
+            - Account deactivated
+            - Email not found (security measure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/password-reset/resend-otp:
+    post:
+      tags:
+        - auth
+        - password-reset
+      summary: Resend password reset OTP
+      description: Resend OTP for password reset verification
+      operationId: resendPasswordResetOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetResendOtpDto'
+      responses:
+        '200':
+          description: OTP resent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResendOtpResponse'
+        '400':
+          description: Invalid or expired reset session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '404':
+          description: Reset session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+  /auth/password-reset/confirm:
+    post:
+      tags:
+        - auth
+        - password-reset
+      summary: Confirm password reset
+      description: Verify OTP and set new password
+      operationId: confirmPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmDto'
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetConfirmResponse'
+        '400':
+          description: |
+            Bad Request. Possible reasons:
+            - Invalid OTP
+            - OTP already used
+            - OTP expired
+            - Reset session expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '404':
+          description: Reset session or OTP not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalServerError'
+
+components:
+  schemas:
+    # Base Registration Schema
+    BaseRegistration:
+      type: object
+      required:
+        - role
+        - email
+        - phoneNumber
+        - password
+      properties:
+        role:
+          type: string
+          enum: [PATIENT, HEALTHCARE_PROVIDER, LAB, IMAGING_CENTER]
+          description: User role
+          example: PATIENT
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        phoneNumber:
+          type: string
+          pattern: '^[0-9]{11}$'
+          description: 11-digit phone number
+          example: '01234567890'
+        password:
+          type: string
+          minLength: 8
+          description: Password (min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char)
+          example: 'SecurePass123!'
+
+    # Patient Registration
+    PatientRegistrationRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseRegistration'
+        - type: object
+          required:
+            - firstName
+            - middleName
+            - surName
+            - gender
+            - dateOfBirth
+            - nationalId
+          properties:
+            role:
+              type: string
+              enum: [PATIENT]
+              example: PATIENT
+            firstName:
+              type: string
+              description: First name
+              example: John
+            middleName:
+              type: string
+              description: Middle name
+              example: Michael
+            surName:
+              type: string
+              description: Last name
+              example: Doe
+            gender:
+              type: string
+              enum: [MALE, FEMALE, OTHER]
+              description: Gender
+              example: MALE
+            dateOfBirth:
+              type: string
+              format: date
+              description: Date of birth (YYYY-MM-DD)
+              example: '1990-01-01'
+            nationalId:
+              type: string
+              pattern: '^[0-9]{14}$'
+              description: 14-digit national ID
+              example: '12345678901234'
+
+    # Healthcare Provider Registration
+    HcpRegistrationRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseRegistration'
+        - type: object
+          required:
+            - firstName
+            - middleName
+            - surName
+            - gender
+            - dateOfBirth
+            - nationalId
+            - medicalLicenseNumber
+            - specialization
+            - workplaceName
+            - workplaceAddress
+          properties:
+            role:
+              type: string
+              enum: [HEALTHCARE_PROVIDER]
+              example: HEALTHCARE_PROVIDER
+            firstName:
+              type: string
+              example: Sarah
+            middleName:
+              type: string
+              example: Elizabeth
+            surName:
+              type: string
+              example: Smith
+            gender:
+              type: string
+              enum: [MALE, FEMALE, OTHER]
+              example: FEMALE
+            dateOfBirth:
+              type: string
+              format: date
+              example: '1985-05-15'
+            nationalId:
+              type: string
+              pattern: '^[0-9]{14}$'
+              example: '98765432101234'
+            medicalLicenseNumber:
+              type: string
+              description: Medical license number
+              example: 'MD-123456'
+            specialization:
+              type: string
+              description: Medical specialization
+              example: Cardiology
+            workplaceName:
+              type: string
+              description: Hospital or clinic name
+              example: 'City General Hospital'
+            workplaceAddress:
+              type: string
+              description: Workplace address
+              example: '123 Medical Street, City'
+
+    # Laboratory Registration
+    LabRegistrationRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseRegistration'
+        - type: object
+          required:
+            - centerName
+            - centerAddress
+            - registrationNumber
+            - administratorFullName
+          properties:
+            role:
+              type: string
+              enum: [LAB]
+              example: LAB
+            centerName:
+              type: string
+              description: Laboratory name
+              example: 'City Diagnostic Lab'
+            centerAddress:
+              type: string
+              description: Laboratory address
+              example: '456 Test Street, City'
+            registrationNumber:
+              type: string
+              description: Laboratory registration number
+              example: 'LAB-789012'
+            administratorFullName:
+              type: string
+              description: Administrator's full name
+              example: 'Dr. Robert Johnson'
+
+    # Imaging Center Registration
+    ImagingRegistrationRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseRegistration'
+        - type: object
+          required:
+            - centerName
+            - centerAddress
+            - registrationNumber
+            - administratorFullName
+          properties:
+            role:
+              type: string
+              enum: [IMAGING_CENTER]
+              example: IMAGING_CENTER
+            centerName:
+              type: string
+              description: Imaging center name
+              example: 'Advanced Imaging Center'
+            centerAddress:
+              type: string
+              description: Center address
+              example: '789 Scan Street, City'
+            registrationNumber:
+              type: string
+              description: Center registration number
+              example: 'IMG-345678'
+            administratorFullName:
+              type: string
+              description: Administrator's full name
+              example: 'Dr. Maria Garcia'
+
+    # Registration DTOs
+    RegisterVerifyOtpDto:
+      type: object
+      required:
+        - registrationSessionId
+        - otp
+      properties:
+        registrationSessionId:
+          type: string
+          format: uuid
+          description: Registration session ID from initial registration
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        otp:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: 6-digit OTP
+          example: '123456'
+
+    RegisterResendOtpDto:
+      type: object
+      required:
+        - registrationSessionId
+      properties:
+        registrationSessionId:
+          type: string
+          format: uuid
+          description: Registration session ID
+          example: '123e4567-e89b-12d3-a456-426614174000'
+
+    # Login DTOs
+    LoginDto:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: 'SecurePass123!'
+
+    LoginResendOtpDto:
+      type: object
+      required:
+        - loginSessionId
+      properties:
+        loginSessionId:
+          type: string
+          format: uuid
+          description: Login session ID from initial login
+          example: '123e4567-e89b-12d3-a456-426614174000'
+
+    LoginVerifyOtpDto:
+      type: object
+      required:
+        - loginSessionId
+        - otp
+        - platform
+      properties:
+        loginSessionId:
+          type: string
+          format: uuid
+          description: Login session ID
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        otp:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: 6-digit OTP
+          example: '123456'
+        platform:
+          type: string
+          enum: [mobile, web]
+          description: Platform type for token handling
+          example: web
+
+    RefreshTokenDto:
+      type: object
+      required:
+        - platform
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token (required for mobile platform)
+          example: 'abc123.def456'
+        platform:
+          type: string
+          enum: [mobile, web]
+          description: Platform type
+          example: mobile
+
+    LogoutDto:
+      type: object
+      required:
+        - platform
+      properties:
+        platform:
+          type: string
+          enum: [mobile, web]
+          description: Platform type
+          example: web
+        refreshToken:
+          type: string
+          description: Refresh token (required for mobile platform)
+          example: 'abc123.def456'
+
+    # Password Reset DTOs
+    PasswordResetInitiateDto:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email address to reset password
+          example: user@example.com
+
+    PasswordResetResendOtpDto:
+      type: object
+      required:
+        - resetSessionId
+      properties:
+        resetSessionId:
+          type: string
+          format: uuid
+          description: Password reset session ID
+          example: '123e4567-e89b-12d3-a456-426614174000'
+
+    PasswordResetConfirmDto:
+      type: object
+      required:
+        - resetSessionId
+        - otp
+        - newPassword
+      properties:
+        resetSessionId:
+          type: string
+          format: uuid
+          description: Password reset session ID
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        otp:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: 6-digit OTP
+          example: '123456'
+        newPassword:
+          type: string
+          minLength: 8
+          description: New password
+          example: 'NewSecurePass123!'
+
+    # Response Schemas
+    RegistrationInitResponse:
+      type: object
+      properties:
+        registrationSessionId:
+          type: string
+          format: uuid
+          description: Session ID for OTP verification
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        otpDelivery:
+          type: string
+          format: email
+          description: Email where OTP was sent
+          example: 'user@example.com'
+        expiresAt:
+          type: string
+          format: date-time
+          description: OTP expiration time
+          example: '2024-01-01T12:05:00.000Z'
+
+    ResendOtpResponse:
+      type: object
+      properties:
+        registrationSessionId:
+          type: string
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        loginSessionId:
+          type: string
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        resetSessionId:
+          type: string
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        otpDelivery:
+          type: string
+          format: email
+          example: 'user@example.com'
+        expiresAt:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:05:00.000Z'
+
+    RegistrationCompleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: 'Registration completed successfully. Your application is under review.'
+        userId:
+          type: string
+          format: uuid
+          description: New user ID
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        email:
+          type: string
+          format: email
+          example: 'user@example.com'
+        role:
+          type: string
+          example: 'PATIENT'
+
+    LoginInitResponse:
+      type: object
+      properties:
+        loginSessionId:
+          type: string
+          format: uuid
+          description: Session ID for OTP verification
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        otpDelivery:
+          type: string
+          format: email
+          example: 'user@example.com'
+        expiresAt:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:05:00.000Z'
+
+    LoginCompleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: 'Login successful.'
+        userId:
+          type: string
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        email:
+          type: string
+          format: email
+          example: 'user@example.com'
+        role:
+          type: string
+          example: 'PATIENT'
+        accessToken:
+          type: string
+          description: JWT access token (valid for 15 minutes)
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        refreshToken:
+          type: string
+          description: Refresh token (only for mobile platform)
+          example: 'abc123.def456'
+
+    RefreshTokenResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        accessToken:
+          type: string
+          description: New JWT access token
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        userId:
+          type: string
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        email:
+          type: string
+          format: email
+          example: 'user@example.com'
+        role:
+          type: string
+          example: 'PATIENT'
+        refreshToken:
+          type: string
+          description: New refresh token (only for mobile platform)
+          example: 'xyz789.uvw012'
+
+    LogoutResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: 'Logged out successfully'
+
+    PasswordResetInitiateResponse:
+      type: object
+      properties:
+        resetSessionId:
+          type: string
+          format: uuid
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        otpDelivery:
+          type: string
+          format: email
+          example: 'user@example.com'
+        expiresAt:
+          type: string
+          format: date-time
+          example: '2024-01-01T12:05:00.000Z'
+
+    PasswordResetConfirmResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: 'Password reset successful. You can now log in with your new password.'
+
+    # Error Schemas
+    BadRequestError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: 'Invalid or missing role'
+        error:
+          type: string
+          example: 'Bad Request'
+
+    UnauthorizedError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 401
+        message:
+          type: string
+          example: 'Invalid email or password'
+        error:
+          type: string
+          example: 'Unauthorized'
+
+    ForbiddenError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 403
+        message:
+          type: string
+          example: 'Your account has been suspended. Please contact support.'
+        error:
+          type: string
+          example: 'Forbidden'
+
+    NotFoundError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: 'Registration session not found'
+        error:
+          type: string
+          example: 'Not Found'
+
+    InternalServerError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 500
+        message:
+          type: string
+          example: 'Registration failed, please try again.'
+        error:
+          type: string
+          example: 'Internal Server Error'
+
+  # Security Schemes
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authenticated endpoints (after login)
+
+# Global Security
+security:
+  - BearerAuth: []

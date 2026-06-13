@@ -1,0 +1,981 @@
+openapi: 3.0.0
+info:
+  title: Admin API Contract
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token required for authentication
+
+  schemas:
+    UserRole:
+      type: string
+      enum: [PATIENT, HEALTHCARE_PROVIDER, LAB, IMAGING_CENTER, ADMIN]
+      description: User role in the system
+
+    VerificationQueueRole:
+      type: string
+      enum: [PATIENT, HEALTHCARE_PROVIDER, LAB, IMAGING_CENTER]
+      description: User roles that can appear in verification queue
+
+    AccountStatus:
+      type: string
+      enum: [PENDING, VERIFIED, REJECTED]
+      description: User account verification status
+
+    VerificationDecision:
+      type: string
+      enum: [APPROVE, REJECT]
+      description: Admin decision for user verification
+
+    StatsResponse:
+      type: object
+      properties:
+        patients:
+          type: integer
+          description: Total number of patients
+          example: 1245
+        healthcareProviders:
+          type: integer
+          description: Total number of healthcare providers
+          example: 342
+        laboratories:
+          type: integer
+          description: Total number of laboratories
+          example: 89
+        imagingCenters:
+          type: integer
+          description: Total number of imaging centers
+          example: 56
+
+    ActivitiesResponse:
+      type: object
+      properties:
+        verifiedUsers:
+          type: integer
+          description: Number of users verified by the admin
+          example: 47
+        rejectedUsers:
+          type: integer
+          description: Number of users rejected by the admin
+          example: 12
+
+    PendingUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        role:
+          $ref: "#/components/schemas/UserRole"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    PaginationInfo:
+      type: object
+      properties:
+        limit:
+          type: integer
+          example: 20
+        nextCursor:
+          type: string
+          format: uuid
+          nullable: true
+          example: "223e4567-e89b-12d3-a456-426614174001"
+        hasMore:
+          type: boolean
+          example: true
+
+    VerificationQueueResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingUser"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    DocumentInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "323e4567-e89b-12d3-a456-426614174002"
+        fileType:
+          type: string
+          enum:
+            [
+              NATIONAL_ID_FRONT,
+              NATIONAL_ID_BACK,
+              SELFIE_WITH_ID,
+              MEDICAL_LICENSE,
+              WORKPLACE_DOC,
+              LAB_ACCREDITATION,
+              RADIOLOGY_ACCREDITATION,
+              LOGO,
+            ]
+          example: "NATIONAL_ID_FRONT"
+        fileName:
+          type: string
+          example: "id_front.jpg"
+        mimeType:
+          type: string
+          example: "image/jpeg"
+        fileSizeBytes:
+          type: integer
+          example: 245760
+        uploadedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        downloadUrl:
+          type: string
+          example: "/api/admin/verification-queue/documents/323e4567-e89b-12d3-a456-426614174002"
+        previewUrl:
+          type: string
+          nullable: true
+          example: "/api/admin/verification-queue/documents/323e4567-e89b-12d3-a456-426614174002"
+
+    GroupedDocuments:
+      type: object
+      properties:
+        identity:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentInfo"
+        workplace:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentInfo"
+        other:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentInfo"
+
+    PatientData:
+      type: object
+      properties:
+        first_name:
+          type: string
+          example: "John"
+        middle_name:
+          type: string
+          nullable: true
+          example: "Michael"
+        surname:
+          type: string
+          example: "Doe"
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER]
+          example: "MALE"
+        date_of_birth:
+          type: string
+          format: date
+          example: "1990-05-15"
+        national_id:
+          type: string
+          example: "1234567890"
+        blood_type:
+          type: string
+          enum:
+            [
+              A_POSITIVE,
+              A_NEGATIVE,
+              B_POSITIVE,
+              B_NEGATIVE,
+              O_POSITIVE,
+              O_NEGATIVE,
+              AB_POSITIVE,
+              AB_NEGATIVE,
+            ]
+          example: "O_POSITIVE"
+
+    HealthcareProviderData:
+      type: object
+      properties:
+        first_name:
+          type: string
+          example: "Sarah"
+        middle_name:
+          type: string
+          nullable: true
+          example: "Elizabeth"
+        surname:
+          type: string
+          example: "Johnson"
+        gender:
+          type: string
+          example: "FEMALE"
+        date_of_birth:
+          type: string
+          format: date
+          example: "1985-08-22"
+        national_id:
+          type: string
+          example: "9876543210"
+        medical_license_number:
+          type: string
+          example: "ML-2024-12345"
+        specialization:
+          type: string
+          example: "Cardiology"
+        workplace_name:
+          type: string
+          example: "City General Hospital"
+        workplace_address:
+          type: string
+          example: "123 Medical Center Blvd, Healthcare City, HC 12345"
+
+    LabData:
+      type: object
+      properties:
+        lab_name:
+          type: string
+          example: "Precision Diagnostics Lab"
+        registration_number:
+          type: string
+          example: "LAB-REG-2024-5678"
+        administrator_full_name:
+          type: string
+          example: "Dr. Robert Chen"
+        lab_address:
+          type: string
+          example: "456 Science Park, Research District, RD 78901"
+
+    ImagingCenterData:
+      type: object
+      properties:
+        center_name:
+          type: string
+          example: "Advanced Imaging Center"
+        registration_number:
+          type: string
+          example: "IMG-REG-2024-9012"
+        administrator_full_name:
+          type: string
+          example: "Dr. Maria Garcia"
+        center_address:
+          type: string
+          example: "789 Radiology Way, Medical City, MC 34567"
+
+    VerificationDetailsResponse:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              example: "123e4567-e89b-12d3-a456-426614174000"
+            email:
+              type: string
+              format: email
+              example: "user@example.com"
+            phone_number:
+              type: string
+              example: "+1234567890"
+            role:
+              $ref: "#/components/schemas/UserRole"
+            account_status:
+              $ref: "#/components/schemas/AccountStatus"
+            email_verified:
+              type: boolean
+              example: true
+            created_at:
+              type: string
+              format: date-time
+              example: "2024-01-15T10:30:00Z"
+        roleSpecificData:
+          oneOf:
+            - $ref: "#/components/schemas/PatientData"
+            - $ref: "#/components/schemas/HealthcareProviderData"
+            - $ref: "#/components/schemas/LabData"
+            - $ref: "#/components/schemas/ImagingCenterData"
+        documents:
+          $ref: "#/components/schemas/GroupedDocuments"
+        metadata:
+          type: object
+          properties:
+            totalDocuments:
+              type: integer
+              example: 5
+            lastUpdated:
+              type: string
+              format: date-time
+              example: "2024-01-16T14:30:00Z"
+
+    VerificationDecisionRequest:
+      type: object
+      required:
+        - userId
+        - decision
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: UUID of the user to verify/reject
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        decision:
+          $ref: "#/components/schemas/VerificationDecision"
+        rejectionReason:
+          type: string
+          minLength: 10
+          description: Required if decision is REJECT
+          example: "Submitted documents are blurry and unreadable. Please upload clearer copies."
+
+    VerificationDecisionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "User has been successfully verified and notified via email."
+
+    ErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: "Bad request"
+        error:
+          type: string
+          example: "Invalid cursor provided."
+
+  parameters:
+    userIdParam:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID of the user
+    documentIdParam:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID of the document
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            statusCode: 401
+            message: "Unauthorized"
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            statusCode: 403
+            message: "Forbidden resource"
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BadRequestError:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+security:
+  - bearerAuth: []
+
+paths:
+  /admin/stats:
+    get:
+      summary: Get system statistics
+      description: Returns counts of users by role across the entire system
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+              examples:
+                defaultStats:
+                  summary: Typical statistics
+                  value:
+                    patients: 1245
+                    healthcareProviders: 342
+                    laboratories: 89
+                    imagingCenters: 56
+                emptyStats:
+                  summary: New system with no users
+                  value:
+                    patients: 0
+                    healthcareProviders: 0
+                    laboratories: 0
+                    imagingCenters: 0
+                largeSystem:
+                  summary: Large scale system
+                  value:
+                    patients: 15000
+                    healthcareProviders: 2340
+                    laboratories: 567
+                    imagingCenters: 432
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error loading dashboard."
+
+  /admin/activities:
+    get:
+      summary: Get admin activities
+      description: Returns counts of users verified and rejected by the current admin
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Activities retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivitiesResponse"
+              examples:
+                activeAdmin:
+                  summary: Admin with activity
+                  value:
+                    verifiedUsers: 47
+                    rejectedUsers: 12
+                newAdmin:
+                  summary: New admin with no activity
+                  value:
+                    verifiedUsers: 0
+                    rejectedUsers: 0
+                experiencedAdmin:
+                  summary: Experienced admin
+                  value:
+                    verifiedUsers: 342
+                    rejectedUsers: 89
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Admin not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 404
+                message: "Admin not found"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error loading dashboard."
+
+  /admin/verification-queue:
+    get:
+      summary: Get verification queue
+      description: Returns paginated list of users pending verification
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items to return (1-100)
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Cursor for pagination (user ID)
+        - name: role
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/VerificationQueueRole"
+          description: Filter by user role
+      responses:
+        "200":
+          description: Verification queue retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationQueueResponse"
+              examples:
+                firstPage:
+                  summary: First page of results
+                  value:
+                    data:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        email: "john.doe@example.com"
+                        role: "PATIENT"
+                        created_at: "2024-01-15T10:30:00Z"
+                      - id: "223e4567-e89b-12d3-a456-426614174001"
+                        email: "sarah.johnson@example.com"
+                        role: "HEALTHCARE_PROVIDER"
+                        created_at: "2024-01-15T09:15:00Z"
+                    pagination:
+                      limit: 2
+                      nextCursor: "223e4567-e89b-12d3-a456-426614174001"
+                      hasMore: true
+                filteredByRole:
+                  summary: Filtered by role (LAB)
+                  value:
+                    data:
+                      - id: "323e4567-e89b-12d3-a456-426614174002"
+                        email: "precision.lab@example.com"
+                        role: "LAB"
+                        created_at: "2024-01-14T16:45:00Z"
+                      - id: "423e4567-e89b-12d3-a456-426614174003"
+                        email: "advanced.diagnostics@example.com"
+                        role: "LAB"
+                        created_at: "2024-01-14T11:20:00Z"
+                    pagination:
+                      limit: 2
+                      nextCursor: null
+                      hasMore: false
+                emptyQueue:
+                  summary: No pending users
+                  value:
+                    data: []
+                    pagination:
+                      limit: 20
+                      nextCursor: null
+                      hasMore: false
+        "400":
+          description: Invalid cursor provided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 400
+                message: "Invalid cursor provided."
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error fetching verification queue."
+
+  /admin/verification-queue/{userId}:
+    get:
+      summary: Get verification details
+      description: Returns detailed information about a pending user including documents
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userIdParam"
+      responses:
+        "200":
+          description: Verification details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationDetailsResponse"
+              examples:
+                patientDetails:
+                  summary: Patient verification details
+                  value:
+                    user:
+                      id: "123e4567-e89b-12d3-a456-426614174000"
+                      email: "john.doe@example.com"
+                      phone_number: "+1234567890"
+                      role: "PATIENT"
+                      account_status: "PENDING"
+                      email_verified: true
+                      created_at: "2024-01-15T10:30:00Z"
+                    roleSpecificData:
+                      first_name: "John"
+                      middle_name: "Michael"
+                      surname: "Doe"
+                      gender: "MALE"
+                      date_of_birth: "1990-05-15"
+                      national_id: "1234567890"
+                      blood_type: "O_POSITIVE"
+                    documents:
+                      identity:
+                        - id: "323e4567-e89b-12d3-a456-426614174002"
+                          fileType: "NATIONAL_ID_FRONT"
+                          fileName: "id_front.jpg"
+                          mimeType: "image/jpeg"
+                          fileSizeBytes: 245760
+                          uploadedAt: "2024-01-15T10:31:00Z"
+                          downloadUrl: "/api/admin/verification-queue/documents/323e4567-e89b-12d3-a456-426614174002"
+                          previewUrl: "/api/admin/verification-queue/documents/323e4567-e89b-12d3-a456-426614174002"
+                        - id: "423e4567-e89b-12d3-a456-426614174003"
+                          fileType: "NATIONAL_ID_BACK"
+                          fileName: "id_back.jpg"
+                          mimeType: "image/jpeg"
+                          fileSizeBytes: 241234
+                          uploadedAt: "2024-01-15T10:31:30Z"
+                          downloadUrl: "/api/admin/verification-queue/documents/423e4567-e89b-12d3-a456-426614174003"
+                          previewUrl: "/api/admin/verification-queue/documents/423e4567-e89b-12d3-a456-426614174003"
+                      workplace: []
+                      other: []
+                    metadata:
+                      totalDocuments: 2
+                      lastUpdated: "2024-01-16T14:30:00Z"
+                hcpDetails:
+                  summary: Healthcare provider verification details
+                  value:
+                    user:
+                      id: "223e4567-e89b-12d3-a456-426614174001"
+                      email: "sarah.johnson@example.com"
+                      phone_number: "+1987654321"
+                      role: "HEALTHCARE_PROVIDER"
+                      account_status: "PENDING"
+                      email_verified: true
+                      created_at: "2024-01-15T09:15:00Z"
+                    roleSpecificData:
+                      first_name: "Sarah"
+                      middle_name: "Elizabeth"
+                      surname: "Johnson"
+                      gender: "FEMALE"
+                      date_of_birth: "1985-08-22"
+                      national_id: "9876543210"
+                      medical_license_number: "ML-2024-12345"
+                      specialization: "Cardiology"
+                      workplace_name: "City General Hospital"
+                      workplace_address: "123 Medical Center Blvd, Healthcare City, HC 12345"
+                    documents:
+                      identity:
+                        - id: "523e4567-e89b-12d3-a456-426614174004"
+                          fileType: "MEDICAL_LICENSE"
+                          fileName: "medical_license.pdf"
+                          mimeType: "application/pdf"
+                          fileSizeBytes: 512000
+                          uploadedAt: "2024-01-15T09:16:00Z"
+                          downloadUrl: "/api/admin/verification-queue/documents/523e4567-e89b-12d3-a456-426614174004"
+                          previewUrl: null
+                      workplace:
+                        - id: "623e4567-e89b-12d3-a456-426614174005"
+                          fileType: "WORKPLACE_DOC"
+                          fileName: "employment_verification.pdf"
+                          mimeType: "application/pdf"
+                          fileSizeBytes: 389120
+                          uploadedAt: "2024-01-15T09:17:00Z"
+                          downloadUrl: "/api/admin/verification-queue/documents/623e4567-e89b-12d3-a456-426614174005"
+                          previewUrl: null
+                      other: []
+                    metadata:
+                      totalDocuments: 2
+                      lastUpdated: "2024-01-16T14:30:00Z"
+                labDetails:
+                  summary: Laboratory verification details
+                  value:
+                    user:
+                      id: "323e4567-e89b-12d3-a456-426614174002"
+                      email: "precision.lab@example.com"
+                      phone_number: "+1122334455"
+                      role: "LAB"
+                      account_status: "PENDING"
+                      email_verified: true
+                      created_at: "2024-01-14T16:45:00Z"
+                    roleSpecificData:
+                      lab_name: "Precision Diagnostics Lab"
+                      registration_number: "LAB-REG-2024-5678"
+                      administrator_full_name: "Dr. Robert Chen"
+                      lab_address: "456 Science Park, Research District, RD 78901"
+                    documents:
+                      identity:
+                        - id: "723e4567-e89b-12d3-a456-426614174006"
+                          fileType: "MEDICAL_LICENSE"
+                          fileName: "lab_director_license.pdf"
+                          mimeType: "application/pdf"
+                          fileSizeBytes: 425000
+                          uploadedAt: "2024-01-14T16:46:00Z"
+                          downloadUrl: "/api/admin/verification-queue/documents/723e4567-e89b-12d3-a456-426614174006"
+                          previewUrl: null
+                      workplace:
+                        - id: "823e4567-e89b-12d3-a456-426614174007"
+                          fileType: "LAB_ACCREDITATION"
+                          fileName: "accreditation_certificate.pdf"
+                          mimeType: "application/pdf"
+                          fileSizeBytes: 1024000
+                          uploadedAt: "2024-01-14T16:47:00Z"
+                          downloadUrl: "/api/admin/verification-queue/documents/823e4567-e89b-12d3-a456-426614174007"
+                          previewUrl: null
+                        - id: "923e4567-e89b-12d3-a456-426614174008"
+                          fileType: "LOGO"
+                          fileName: "lab_logo.png"
+                          mimeType: "image/png"
+                          fileSizeBytes: 156000
+                          uploadedAt: "2024-01-14T16:48:00Z"
+                          downloadUrl: "/api/admin/verification-queue/documents/923e4567-e89b-12d3-a456-426614174008"
+                          previewUrl: "/api/admin/verification-queue/documents/923e4567-e89b-12d3-a456-426614174008"
+                      other: []
+                    metadata:
+                      totalDocuments: 3
+                      lastUpdated: "2024-01-16T14:30:00Z"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                notPending:
+                  value:
+                    statusCode: 400
+                    message: "User is not in the pending list."
+                adminUser:
+                  value:
+                    statusCode: 400
+                    message: "Cannot view admin user details."
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 404
+                message: "User not found."
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error fetching verification details."
+
+  /admin/verification-queue/documents/{documentId}:
+    get:
+      summary: Download document
+      description: Downloads or previews a document from a pending user
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/documentIdParam"
+      responses:
+        "200":
+          description: Document stream
+          headers:
+            Content-Type:
+              schema:
+                type: string
+              description: MIME type of the document
+            Content-Disposition:
+              schema:
+                type: string
+              description: inline for images/PDFs, attachment for other files
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Document not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 400
+                message: "Document not available for download."
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: Document or file not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                documentNotFound:
+                  value:
+                    statusCode: 404
+                    message: "Document not found."
+                fileNotFound:
+                  value:
+                    statusCode: 404
+                    message: "File not found."
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error fetching document."
+
+  /admin/verification-queue/decision:
+    post:
+      summary: Process verification decision
+      description: Approve or reject a pending user verification
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerificationDecisionRequest"
+            examples:
+              approveRequest:
+                summary: Approve a user
+                value:
+                  userId: "123e4567-e89b-12d3-a456-426614174000"
+                  decision: "APPROVE"
+              rejectRequest:
+                summary: Reject a user with reason
+                value:
+                  userId: "223e4567-e89b-12d3-a456-426614174001"
+                  decision: "REJECT"
+                  rejectionReason: "Submitted documents are blurry and unreadable. Please upload clearer copies of your ID and medical license."
+              approveHealthcareProvider:
+                summary: Approve a healthcare provider
+                value:
+                  userId: "323e4567-e89b-12d3-a456-426614174002"
+                  decision: "APPROVE"
+      responses:
+        "200":
+          description: Decision processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationDecisionResponse"
+              examples:
+                approveResponse:
+                  summary: Approval response
+                  value:
+                    message: "User has been successfully verified and notified via email."
+                rejectResponse:
+                  summary: Rejection response
+                  value:
+                    message: "User has been rejected and notified via email."
+                emailFailureResponse:
+                  summary: Decision processed but email failed
+                  value:
+                    message: "User has been successfully verified and notified via email."
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                adminAccount:
+                  value:
+                    statusCode: 400
+                    message: "Cannot process admin accounts."
+                missingRejectionReason:
+                  value:
+                    statusCode: 400
+                    message: "Rejection reason must be at least 10 characters long."
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 404
+                message: "User not found."
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 409
+                message: "User is not in pending status. Decision may have already been made."
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Failed to process verification decision."
+
+tags:
+  - name: Admin
+    description: Administrative operations for user verification management

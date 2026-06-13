@@ -1,0 +1,1824 @@
+openapi: 3.0.3
+info:
+  title: Sijill - Clinical Module API
+  version: 1.0.0
+  description: |
+    Complete API documentation for the Clinical module of Sijill, This module handles:
+      - Patient permission token management (granting access to HCPs, labs, imaging centers)
+      - Clinical session management (HCP, Lab, Imaging Center)
+      - Medical history retrieval (encounter list & detail with nested orders & documents)
+      - Encounter creation (diagnoses, medications, lab/imaging orders, allergies)
+      - Lab & imaging result submission with file uploads
+      - Document viewing/downloading for completed lab/imaging results
+
+    ## Authentication
+    The API uses four distinct JWT-based authentication schemes:
+
+    1. **User Bearer Token** (`UserBearerAuth`)
+       - Regular JWT access token for patients, HCPs, labs, and imaging centers
+       - Used for: token generation, session creation, patient self-service
+       - Header: `Authorization: Bearer <jwt_access_token>`
+
+    2. **Clinical Session Token** (`ClinicalSessionAuth`)
+       - Short-lived JWT signed with `JWT_CLINICAL_SECRET`
+       - Issued when an HCP starts a clinical session
+       - Used for: all session-scoped HCP operations
+       - Header: `Authorization: Bearer <clinical_session_jwt>`
+
+    3. **Lab Session Token** (`LabSessionAuth`)
+       - Short-lived JWT for lab sessions
+       - Used for: viewing lab orders and submitting lab results
+       - Header: `Authorization: Bearer <lab_session_jwt>`
+
+    4. **Imaging Session Token** (`ImagingSessionAuth`)
+       - Short-lived JWT for imaging center sessions
+       - Used for: viewing imaging orders and submitting imaging results
+       - Header: `Authorization: Bearer <imaging_session_jwt>`
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development server
+
+paths:
+  # --------------------------------------------------------------------------
+  # PERMISSION TOKENS
+  # --------------------------------------------------------------------------
+  /clinical/permission-tokens:
+    post:
+      summary: Generate HCP permission token
+      description: |
+        **Role:** PATIENT
+
+        Generates a 6-digit permission code that a Healthcare Provider can use to start a clinical session.
+        The patient chooses the access type (READ_ONLY, WRITE_ONLY, READ_WRITE) and expiration time.
+      tags: [Permission Tokens]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateTokenRequest'
+      responses:
+        '201':
+          description: Token generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateTokenResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List active permission tokens
+      description: |
+        **Role:** PATIENT
+
+        Returns all active (non-expired, non-revoked) permission tokens for the authenticated patient,
+        along with whether each has been used.
+      tags: [Permission Tokens]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: List of active permission tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListPermissionTokensResponse'
+
+  /clinical/permission-tokens/{tokenId}/revoke:
+    patch:
+      summary: Revoke a permission token
+      description: |
+        **Role:** PATIENT
+
+        Revokes an active permission token, preventing it from being used to start a session.
+        Also revokes any active access grants associated with the token.
+      tags: [Permission Tokens]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Permission token UUID
+      responses:
+        '200':
+          description: Token revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeTokenResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clinical/medical-orders/lab:
+    get:
+      summary: List active lab orders
+      description: |
+        **Role:** PATIENT
+
+        Lists all lab orders with PENDING or IN_PROGRESS status for the authenticated patient.
+      tags: [Medical Orders]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Active lab orders list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalOrdersListResponse'
+
+  /clinical/medical-orders/imaging:
+    get:
+      summary: List active imaging orders
+      description: |
+        **Role:** PATIENT
+
+        Lists all imaging orders with PENDING or IN_PROGRESS status for the authenticated patient.
+      tags: [Medical Orders]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Active imaging orders list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalOrdersListResponse'
+
+  /clinical/medical-orders/{orderId}/permission-tokens/lab:
+    post:
+      summary: Generate lab permission token
+      description: |
+        **Role:** PATIENT
+
+        Generates a 6-digit permission code for a laboratory to access a specific lab order.
+        The token auto-expires after 60 minutes.
+        Only applicable for orders with PENDING or IN_PROGRESS status.
+      tags: [Permission Tokens]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Medical order UUID
+      responses:
+        '201':
+          description: Lab permission token generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnosticPermissionTokenResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clinical/medical-orders/{orderId}/permission-tokens/imaging:
+    post:
+      summary: Generate imaging permission token
+      description: |
+        **Role:** PATIENT
+
+        Generates a 6-digit permission code for an imaging center to access a specific imaging order.
+      tags: [Permission Tokens]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Medical order UUID
+      responses:
+        '201':
+          description: Imaging permission token generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagnosticPermissionTokenResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # CLINICAL SESSIONS (HCP)
+  # --------------------------------------------------------------------------
+  /clinical/sessions:
+    post:
+      summary: Start a clinical session
+      description: |
+        **Role:** HEALTHCARE_PROVIDER
+
+        Redeems a patient's 6-digit permission code and starts a clinical session.
+        Returns a clinical session JWT that must be used for all subsequent session-scoped operations.
+        The session inherits the access type from the original permission token.
+      tags: [Clinical Sessions]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSessionRequest'
+      responses:
+        '201':
+          description: Clinical session started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartClinicalSessionResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clinical/sessions/{sessionId}/medical-identity:
+    get:
+      summary: Get patient medical identity
+      description: |
+        **Session:** ClinicalSession (HCP)
+
+        Returns the patient's basic medical identity including vitals, active diagnoses,
+        current medications, allergies, chronic conditions, and emergency contacts.
+      tags: [Clinical Sessions]
+      security: [{ ClinicalSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Patient medical identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalIdentityResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update patient vitals
+      description: |
+        **Session:** ClinicalSession (HCP) with WRITE_ONLY or READ_WRITE access
+
+        Updates the patient's blood type, weight, and/or height.
+        Blood type can only be set once and cannot be overwritten.
+      tags: [Clinical Sessions]
+      security: [{ ClinicalSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVitalsRequest'
+      responses:
+        '200':
+          description: Vitals updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateVitalsResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clinical/sessions/{sessionId}/medical-history:
+    get:
+      summary: List medical history (paginated)
+      description: |
+        **Session:** ClinicalSession (HCP) with READ_ONLY or READ_WRITE access
+
+        Returns a paginated list of the patient's clinical encounters, ordered by date
+        (most recent first). Each entry includes the primary diagnosis.
+      tags: [Medical History]
+      security: [{ ClinicalSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated medical history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalHistoryListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clinical/sessions/{sessionId}/medical-history/{encounterId}:
+    get:
+      summary: Get encounter details
+      description: |
+        **Session:** ClinicalSession (HCP) with READ_ONLY or READ_WRITE access
+
+        Returns the full details of a specific encounter including symptoms, diagnoses,
+        medications, and lab/imaging orders with their results and attached documents.
+        Document URLs point to the download endpoint authenticated with the same session token.
+      tags: [Medical History]
+      security: [{ ClinicalSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/EncounterId'
+      responses:
+        '200':
+          description: Full encounter detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncounterDetailResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clinical/sessions/{sessionId}/documents/{documentId}:
+    get:
+      summary: Download/view a clinical document
+      description: |
+        **Session:** ClinicalSession (HCP)
+
+        Streams a lab result or imaging result document file.
+        The document must belong to a lab/imaging result linked to the current patient's medical orders.
+
+        - Images (JPEG, PNG, WebP, HEIC) and PDFs are served inline (view in browser)
+        - Other file types are served as attachment (download)
+      tags: [Documents]
+      security: [{ ClinicalSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: File stream
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /clinical/sessions/{sessionId}/encounters:
+    post:
+      summary: Create an encounter
+      description: |
+        **Session:** ClinicalSession (HCP) with WRITE_ONLY or READ_WRITE access
+
+        Creates a new clinical encounter with symptoms, diagnoses, medications,
+        lab orders, imaging orders, and allergies. Also creates reminders for medications
+        and medical orders, plus appointment reminders if nextAppointmentDate is set.
+
+        At least 1 symptom and 1 diagnosis are required.
+      tags: [Clinical Sessions]
+      security: [{ ClinicalSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEncounterRequest'
+      responses:
+        '201':
+          description: Encounter created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateEncounterResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # LAB SESSIONS
+  # --------------------------------------------------------------------------
+  /diagnostic/lab/sessions:
+    post:
+      summary: Start a lab session
+      description: |
+        **Role:** LAB
+
+        Redeems a patient's 6-digit lab permission code and starts a lab session.
+        Returns a lab session JWT for subsequent lab operations.
+      tags: [Lab Sessions]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSessionRequest'
+      responses:
+        '201':
+          description: Lab session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartDiagnosticSessionResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /diagnostic/lab/sessions/{sessionId}/order-view:
+    get:
+      summary: Get lab order details
+      description: |
+        **Session:** LabSession
+
+        Returns the patient's medical identity and the lab order details for the specific
+        medical order associated with this session.
+      tags: [Lab Sessions]
+      security: [{ LabSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Lab order view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderViewResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /diagnostic/lab/sessions/{sessionId}/results:
+    post:
+      summary: Upload lab results
+      description: |
+        **Session:** LabSession
+
+        Submits lab results for the completed order. Accepts up to 10 file attachments
+        (images or PDFs, max 5 MB each) and a JSON result data string.
+        Marks the medical order as COMPLETED and deactivates related reminders.
+      tags: [Lab Sessions]
+      security: [{ LabSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [resultData, labResult]
+              properties:
+                resultData:
+                  type: string
+                  description: JSON string containing structured lab result data
+                  example: '{"results":[{"name":"Hemoglobin","unit":"g/dL","value":12.4,"referenceRange":"12.0-15.5"}],"testType":"COMPLETE_BLOOD_COUNT","specimenType":"BLOOD","overallImpression":"CBC is within normal limits.","clinicalIndication":"Rule out anaemia"}'
+                additionalNotes:
+                  type: string
+                  description: Optional notes about the lab results
+                labResult:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                    description: Lab result document files (images or PDF)
+                  minItems: 1
+                  maxItems: 10
+      responses:
+        '200':
+          description: Lab results submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResultResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # IMAGING SESSIONS
+  # --------------------------------------------------------------------------
+  /diagnostic/imaging/sessions:
+    post:
+      summary: Start an imaging session
+      description: |
+        **Role:** IMAGING_CENTER
+
+        Redeems a patient's 6-digit imaging permission code and starts an imaging session.
+        Returns an imaging session JWT for subsequent imaging operations.
+      tags: [Imaging Sessions]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSessionRequest'
+      responses:
+        '201':
+          description: Imaging session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartDiagnosticSessionResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /diagnostic/imaging/sessions/{sessionId}/order-view:
+    get:
+      summary: Get imaging order details
+      description: |
+        **Session:** ImagingSession
+
+        Returns the patient's medical identity and the imaging order details.
+      tags: [Imaging Sessions]
+      security: [{ ImagingSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Imaging order view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderViewResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /diagnostic/imaging/sessions/{sessionId}/results:
+    post:
+      summary: Upload imaging results
+      description: |
+        **Session:** ImagingSession
+
+        Submits imaging results. Accepts up to 10 file attachments (images, PDFs, or DICOM,
+        max 50 MB each) along with study description and findings text.
+        Marks the medical order as COMPLETED and deactivates related reminders.
+      tags: [Imaging Sessions]
+      security: [{ ImagingSessionAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [studyDescription, findings, imagingResult]
+              properties:
+                studyDescription:
+                  type: string
+                  description: Description of the imaging study/procedure performed
+                  maxLength: 2000
+                findings:
+                  type: string
+                  description: Detailed findings and interpretation of the imaging study
+                  maxLength: 20000
+                imagingResult:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                    description: Imaging result files (images, PDF, DICOM)
+                  minItems: 1
+                  maxItems: 10
+      responses:
+        '200':
+          description: Imaging results submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResultResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  # --------------------------------------------------------------------------
+  # SECURITY SCHEMES
+  # --------------------------------------------------------------------------
+  securitySchemes:
+    UserBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Standard user JWT access token for patients, HCPs, labs, and imaging centers
+
+    ClinicalSessionAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Clinical session JWT (issued after POST /clinical/sessions)
+
+    LabSessionAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Lab session JWT (issued after POST /diagnostic/lab/sessions)
+
+    ImagingSessionAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Imaging session JWT (issued after POST /diagnostic/imaging/sessions)
+
+  # --------------------------------------------------------------------------
+  # REUSABLE PARAMETERS
+  # --------------------------------------------------------------------------
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Session UUID (validated against the session token)
+
+    TokenId:
+      name: tokenId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Permission token UUID
+
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Medical order UUID
+
+    EncounterId:
+      name: encounterId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Clinical encounter UUID
+
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Document UUID
+
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number (1-indexed)
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+      description: Number of items per page
+
+  # --------------------------------------------------------------------------
+  # SCHEMAS
+  # --------------------------------------------------------------------------
+  schemas:
+    # --- Enums ---
+    AccessType:
+      type: string
+      enum: [READ_ONLY, WRITE_ONLY, READ_WRITE]
+
+    ClinicalEntityType:
+      type: string
+      enum: [HEALTHCARE_PROVIDER, LAB, IMAGING_CENTER]
+
+    OrderType:
+      type: string
+      enum: [LABORATORY, IMAGING]
+
+    OrderStatus:
+      type: string
+      enum: [PENDING, IN_PROGRESS, COMPLETED, CANCELLED]
+
+    OrderPriority:
+      type: string
+      enum: [ROUTINE, URGENT, STAT]
+
+    DiagnosisStatus:
+      type: string
+      enum: [ACTIVE, RESOLVED_BY_HCP, RESOLVED_BY_PATIENT]
+
+    MedicationForm:
+      type: string
+      enum:
+        [
+          TABLET,
+          CAPSULE,
+          LIQUID,
+          INJECTION,
+          TOPICAL,
+          INHALER,
+          DROPS,
+          PATCH,
+          OTHER,
+        ]
+
+    DosageUnit:
+      type: string
+      enum:
+        [MG, MCG, G, ML, IU, UNITS, DROPS, PUFFS, TABLETS, CAPSULES, TEASPOONS]
+
+    BloodType:
+      type: string
+      enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', UNKNOWN]
+
+    AllergySeverity:
+      type: string
+      enum: [MILD, MODERATE, SEVERE, LIFE_THREATENING]
+
+    # --- Common ---
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+        statusCode:
+          type: integer
+
+    # --- Request Schemas ---
+    GenerateTokenRequest:
+      type: object
+      required: [entityType, expiresInMinutes]
+      properties:
+        entityType:
+          allOf:
+            - $ref: '#/components/schemas/ClinicalEntityType'
+          description: Must be HEALTHCARE_PROVIDER for this endpoint
+        accessType:
+          allOf:
+            - $ref: '#/components/schemas/AccessType'
+          description: Required when entityType is HEALTHCARE_PROVIDER
+        expiresInMinutes:
+          type: integer
+          enum: [15, 30, 45, 60]
+          description: Token expiration time in minutes
+
+    StartSessionRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: 6-digit permission code obtained from the patient
+
+    UpdateVitalsRequest:
+      type: object
+      properties:
+        bloodType:
+          allOf:
+            - $ref: '#/components/schemas/BloodType'
+          description: Can only be set once; cannot be overwritten
+        weightKg:
+          type: integer
+          minimum: 1
+          maximum: 500
+          description: Weight in kilograms
+        heightCm:
+          type: integer
+          minimum: 1
+          maximum: 300
+          description: Height in centimeters
+
+    CreateEncounterRequest:
+      type: object
+      required: [symptoms, diagnoses]
+      properties:
+        locationAddress:
+          type: string
+          description: Where the encounter took place
+        symptoms:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SymptomInput'
+        diagnoses:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/DiagnosisInput'
+        medications:
+          type: array
+          items:
+            $ref: '#/components/schemas/MedicationInput'
+        labOrders:
+          type: array
+          items:
+            $ref: '#/components/schemas/LabOrderInput'
+        imagingOrders:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImagingOrderInput'
+        allergies:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllergyInput'
+        nextAppointmentDate:
+          type: string
+          format: date-time
+          description: If set, creates an appointment reminder and notification
+        appointmentNotes:
+          type: string
+          description: Notes about the next appointment
+
+    SymptomInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+
+    DiagnosisInput:
+      type: object
+      required: [icd11Code, icd11Title]
+      properties:
+        icd11Code:
+          type: string
+          maxLength: 20
+          description: ICD-11 diagnosis code
+        icd11Title:
+          type: string
+          maxLength: 500
+          description: ICD-11 diagnosis title
+        clinicalDescription:
+          type: string
+          description: Optional free-text clinical description
+        isChronic:
+          type: boolean
+          default: false
+
+    MedicationInput:
+      type: object
+      required:
+        [medicationName, dosageAmount, dosageUnit, form, frequency, startDate]
+      properties:
+        medicationName:
+          type: string
+          maxLength: 500
+        dosageAmount:
+          type: number
+          minimum: 0
+        dosageUnit:
+          $ref: '#/components/schemas/DosageUnit'
+        form:
+          $ref: '#/components/schemas/MedicationForm'
+        frequency:
+          type: string
+          maxLength: 500
+          description: e.g. "Twice daily with meals"
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        instructions:
+          type: string
+        diagnosisIndex:
+          type: integer
+          minimum: 0
+          description: Index into the diagnoses array to link this medication to a diagnosis
+
+    LabOrderInput:
+      type: object
+      required: [testTypeId, priority]
+      properties:
+        testTypeId:
+          type: integer
+          description: Reference ID for the test type
+        specimenTypeId:
+          type: integer
+          description: Reference ID for the specimen type
+        priority:
+          $ref: '#/components/schemas/OrderPriority'
+        fastingRequired:
+          type: boolean
+          default: false
+        clinicalIndication:
+          type: string
+
+    ImagingOrderInput:
+      type: object
+      required: [imagingTypeId, bodyPartId, priority]
+      properties:
+        imagingTypeId:
+          type: integer
+          description: Reference ID for the imaging type
+        bodyPartId:
+          type: integer
+          description: Reference ID for the body part
+        priority:
+          $ref: '#/components/schemas/OrderPriority'
+        contrastUsed:
+          type: boolean
+          default: false
+        clinicalIndication:
+          type: string
+
+    AllergyInput:
+      type: object
+      required: [allergenName, severity]
+      properties:
+        allergenName:
+          type: string
+          maxLength: 500
+        severity:
+          $ref: '#/components/schemas/AllergySeverity'
+        reactionDescription:
+          type: string
+
+    # --- Response Schemas ---
+    GenerateTokenResponse:
+      type: object
+      properties:
+        tokenId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          description: 6-digit permission code to share with the HCP/lab/imaging center
+        entityType:
+          $ref: '#/components/schemas/ClinicalEntityType'
+        accessType:
+          $ref: '#/components/schemas/AccessType'
+        expiresAt:
+          type: string
+          format: date-time
+
+    DiagnosticPermissionTokenResponse:
+      type: object
+      properties:
+        tokenId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        entityType:
+          $ref: '#/components/schemas/ClinicalEntityType'
+        accessType:
+          $ref: '#/components/schemas/AccessType'
+        expiresAt:
+          type: string
+          format: date-time
+        medicalOrderId:
+          type: string
+          format: uuid
+
+    ListPermissionTokensResponse:
+      type: object
+      properties:
+        tokens:
+          type: array
+          items:
+            type: object
+            properties:
+              tokenId:
+                type: string
+                format: uuid
+              medicalOrderId:
+                type: string
+                format: uuid
+                nullable: true
+              entityType:
+                $ref: '#/components/schemas/ClinicalEntityType'
+              accessType:
+                $ref: '#/components/schemas/AccessType'
+              expiresAt:
+                type: string
+                format: date-time
+              createdAt:
+                type: string
+                format: date-time
+              wasUsed:
+                type: boolean
+
+    RevokeTokenResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        tokenId:
+          type: string
+          format: uuid
+        revokedAt:
+          type: string
+          format: date-time
+
+    MedicalOrdersListResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            type: object
+            properties:
+              orderId:
+                type: string
+                format: uuid
+              orderType:
+                $ref: '#/components/schemas/OrderType'
+              orderStatus:
+                $ref: '#/components/schemas/OrderStatus'
+              orderedAt:
+                type: string
+                format: date-time
+              orderedBy:
+                type: string
+                description: Full name of the HCP who ordered
+              orderedBySpecialization:
+                type: string
+              labOrder:
+                type: object
+                nullable: true
+                properties:
+                  testType:
+                    type: string
+                  specimenType:
+                    type: string
+                  priority:
+                    $ref: '#/components/schemas/OrderPriority'
+                  fastingRequired:
+                    type: boolean
+                  clinicalIndication:
+                    type: string
+              imagingOrder:
+                type: object
+                nullable: true
+                properties:
+                  imagingType:
+                    type: string
+                  bodyPart:
+                    type: string
+                  priority:
+                    $ref: '#/components/schemas/OrderPriority'
+                  contrastUsed:
+                    type: boolean
+                  clinicalIndication:
+                    type: string
+
+    StartClinicalSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        clinicalSessionToken:
+          type: string
+          description: JWT to use as Bearer token for all session-scoped HCP endpoints
+        accessType:
+          $ref: '#/components/schemas/AccessType'
+        expiresAt:
+          type: string
+          format: date-time
+        patient:
+          type: object
+          properties:
+            patientId:
+              type: string
+              format: uuid
+            fullName:
+              type: string
+            gender:
+              type: string
+            age:
+              type: integer
+
+    StartDiagnosticSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        labSessionToken:
+          type: string
+          description: JWT for lab session endpoints (only for lab sessions)
+        imagingSessionToken:
+          type: string
+          description: JWT for imaging session endpoints (only for imaging sessions)
+        medicalOrderId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        patient:
+          type: object
+          properties:
+            patientId:
+              type: string
+              format: uuid
+            fullName:
+              type: string
+            gender:
+              type: string
+            age:
+              type: integer
+
+    MedicalIdentityResponse:
+      type: object
+      properties:
+        basicInfo:
+          type: object
+          properties:
+            fullName:
+              type: string
+            gender:
+              type: string
+            age:
+              type: integer
+            bloodType:
+              type: string
+              nullable: true
+            weightKg:
+              type: number
+              nullable: true
+            heightCm:
+              type: number
+              nullable: true
+            profilePictureUrl:
+              type: string
+              nullable: true
+        activeDiagnoses:
+          type: array
+          items:
+            type: object
+            properties:
+              diagnosisId:
+                type: string
+                format: uuid
+              icd11Code:
+                type: string
+              icd11Title:
+                type: string
+              diagnosedBy:
+                type: string
+              diagnosedDate:
+                type: string
+                format: date
+        currentMedications:
+          type: array
+          items:
+            type: object
+            properties:
+              medicationName:
+                type: string
+              dosageAmount:
+                type: number
+              dosageUnit:
+                type: string
+              form:
+                type: string
+              frequency:
+                type: string
+              startDate:
+                type: string
+                format: date
+              endDate:
+                type: string
+                format: date
+                nullable: true
+              prescribedBy:
+                type: string
+              prescribedAt:
+                type: string
+                format: date-time
+        allergies:
+          type: array
+          items:
+            type: object
+            properties:
+              allergyId:
+                type: string
+                format: uuid
+              allergenName:
+                type: string
+              severity:
+                $ref: '#/components/schemas/AllergySeverity'
+              reactionDescription:
+                type: string
+                nullable: true
+              verifiedBy:
+                type: string
+              verifiedDate:
+                type: string
+                format: date
+        chronicConditions:
+          type: array
+          items:
+            type: object
+            properties:
+              diagnosisId:
+                type: string
+                format: uuid
+              icd11Title:
+                type: string
+              icd11Code:
+                type: string
+              diagnosedBy:
+                type: string
+              diagnosedDate:
+                type: string
+                format: date
+        emergencyContacts:
+          type: array
+          items:
+            type: object
+            properties:
+              contactId:
+                type: string
+                format: uuid
+              contactName:
+                type: string
+              relationship:
+                type: string
+              phoneNumber:
+                type: string
+              isPrimary:
+                type: boolean
+
+    UpdateVitalsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        updatedFields:
+          type: array
+          items:
+            type: string
+        bloodType:
+          type: string
+          nullable: true
+        weightKg:
+          type: number
+          nullable: true
+        heightCm:
+          type: number
+          nullable: true
+
+    MedicalHistoryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              encounterId:
+                type: string
+                format: uuid
+              hcpFullName:
+                type: string
+              hcpSpecialization:
+                type: string
+              encounterDate:
+                type: string
+                format: date-time
+              locationAddress:
+                type: string
+                nullable: true
+              primaryDiagnosis:
+                type: object
+                nullable: true
+                properties:
+                  icd11Code:
+                    type: string
+                  icd11Title:
+                    type: string
+        pagination:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
+            totalPages:
+              type: integer
+
+    EncounterDetailResponse:
+      type: object
+      properties:
+        encounterId:
+          type: string
+          format: uuid
+        hcpFullName:
+          type: string
+        hcpSpecialization:
+          type: string
+        encounterDate:
+          type: string
+          format: date-time
+        locationAddress:
+          type: string
+          nullable: true
+        nextAppointmentDate:
+          type: string
+          format: date-time
+          nullable: true
+        appointmentNotes:
+          type: string
+          nullable: true
+        symptoms:
+          type: array
+          items:
+            $ref: '#/components/schemas/SymptomOutput'
+        diagnoses:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiagnosisOutput'
+        medications:
+          type: array
+          items:
+            $ref: '#/components/schemas/MedicationOutput'
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderOutput'
+
+    SymptomOutput:
+      type: object
+      properties:
+        symptomId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+
+    DiagnosisOutput:
+      type: object
+      properties:
+        diagnosisId:
+          type: string
+          format: uuid
+        icd11Code:
+          type: string
+        icd11Title:
+          type: string
+        clinicalDescription:
+          type: string
+          nullable: true
+        isChronic:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/DiagnosisStatus'
+
+    MedicationOutput:
+      type: object
+      properties:
+        medicationId:
+          type: string
+          format: uuid
+        medicationName:
+          type: string
+        dosageAmount:
+          type: number
+          nullable: true
+        dosageUnit:
+          type: string
+          nullable: true
+        form:
+          type: string
+        frequency:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+        prescribedBy:
+          type: string
+        prescribedAt:
+          type: string
+          format: date-time
+
+    OrderOutput:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        orderType:
+          $ref: '#/components/schemas/OrderType'
+        orderStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        orderedAt:
+          type: string
+          format: date-time
+        labOrder:
+          type: object
+          nullable: true
+          properties:
+            testType:
+              type: string
+            specimenType:
+              type: string
+            priority:
+              $ref: '#/components/schemas/OrderPriority'
+            fastingRequired:
+              type: boolean
+            clinicalIndication:
+              type: string
+              nullable: true
+            result:
+              type: object
+              nullable: true
+              properties:
+                resultData:
+                  type: object
+                  description: Arbitrary JSON structure with lab test results
+                additionalNotes:
+                  type: string
+                  nullable: true
+                uploadedAt:
+                  type: string
+                  format: date-time
+                documents:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DocumentReference'
+        imagingOrder:
+          type: object
+          nullable: true
+          properties:
+            imagingType:
+              type: string
+            bodyPart:
+              type: string
+            priority:
+              $ref: '#/components/schemas/OrderPriority'
+            contrastUsed:
+              type: boolean
+            clinicalIndication:
+              type: string
+              nullable: true
+            result:
+              type: object
+              nullable: true
+              properties:
+                studyDescription:
+                  type: string
+                findings:
+                  type: string
+                uploadedAt:
+                  type: string
+                  format: date-time
+                documents:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DocumentReference'
+
+    DocumentReference:
+      type: object
+      properties:
+        documentId:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+          description: UUID-based filename on disk (includes extension)
+        mimeType:
+          type: string
+          description: MIME type of the file
+        fileSizeBytes:
+          type: string
+          description: File size in bytes (as string from BIGINT)
+        url:
+          type: string
+          format: uri
+          description: Full API URL to download/view this document (requires clinical session JWT)
+
+    CreateEncounterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        encounterId:
+          type: string
+          format: uuid
+        message:
+          type: string
+        notificationsCreated:
+          type: integer
+
+    OrderViewResponse:
+      type: object
+      properties:
+        patientMedicalIdentity:
+          type: object
+          properties:
+            basicInfo:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                gender:
+                  type: string
+                age:
+                  type: integer
+                bloodType:
+                  type: string
+                  nullable: true
+                weightKg:
+                  type: number
+                  nullable: true
+                heightCm:
+                  type: number
+                  nullable: true
+                profilePictureUrl:
+                  type: string
+                  nullable: true
+            activeDiagnoses:
+              type: array
+              items:
+                type: object
+            currentMedications:
+              type: array
+              items:
+                type: object
+            allergies:
+              type: array
+              items:
+                type: object
+            chronicConditions:
+              type: array
+              items:
+                type: object
+            emergencyContacts:
+              type: array
+              items:
+                type: object
+        labOrder:
+          type: object
+          nullable: true
+          properties:
+            orderId:
+              type: string
+              format: uuid
+            orderStatus:
+              $ref: '#/components/schemas/OrderStatus'
+            orderedAt:
+              type: string
+              format: date-time
+            orderedBy:
+              type: string
+            testType:
+              type: string
+            specimenType:
+              type: string
+            priority:
+              $ref: '#/components/schemas/OrderPriority'
+            fastingRequired:
+              type: boolean
+            clinicalIndication:
+              type: string
+              nullable: true
+        imagingOrder:
+          type: object
+          nullable: true
+          properties:
+            orderId:
+              type: string
+              format: uuid
+            orderStatus:
+              $ref: '#/components/schemas/OrderStatus'
+            orderedAt:
+              type: string
+              format: date-time
+            orderedBy:
+              type: string
+            imagingType:
+              type: string
+            bodyPart:
+              type: string
+            priority:
+              $ref: '#/components/schemas/OrderPriority'
+            contrastUsed:
+              type: boolean
+            clinicalIndication:
+              type: string
+              nullable: true
+
+    UploadResultResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        orderId:
+          type: string
+          format: uuid
+        resultId:
+          type: string
+          format: uuid
+        documentIds:
+          type: array
+          items:
+            type: string
+            format: uuid

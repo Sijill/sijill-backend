@@ -1,0 +1,1557 @@
+openapi: 3.0.3
+info:
+  title: Sijill - Patient Module API
+  version: 1.0.0
+  description: |
+    Complete API documentation for the Patient (mobile app) module of Sijill. This module handles:
+      - Medical identity overview (basic info, active diagnoses, medications, allergies, chronic conditions, emergency contacts)
+      - Medical history (encounter list & detail)
+      - Reminders (list, counters, today schedule, update/dismiss)
+      - Notifications (list, consume pending, mark read)
+      - Health journal (diagnoses, notes, AI health snapshots)
+      - Profile picture upload & retrieval
+      - Emergency contact management (add/remove)
+
+    ## Authentication
+    All endpoints require a standard user JWT access token with the PATIENT role.
+
+    **User Bearer Token** (`UserBearerAuth`)
+      - Regular JWT access token for patients
+      - Header: `Authorization: Bearer <jwt_access_token>`
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development server
+
+paths:
+  # --------------------------------------------------------------------------
+  # MEDICAL IDENTITY
+  # --------------------------------------------------------------------------
+  /patient/medical-identity:
+    get:
+      summary: Get patient medical identity
+      description: |
+        **Role:** PATIENT
+
+        Returns the patient's basic medical identity including age, gender, blood type,
+        BMI, active diagnoses, current medications, allergies, chronic conditions,
+        and emergency contacts.
+      tags: [Medical Identity]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Patient medical identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalIdentityResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Patient profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # MEDICAL HISTORY
+  # --------------------------------------------------------------------------
+  /patient/medical-history:
+    get:
+      summary: List medical history
+      description: |
+        **Role:** PATIENT
+
+        Returns a list of the patient's clinical encounters, ordered by date
+        (most recent first). Each entry includes the doctor name, speciality,
+        date, location, and primary diagnosis.
+      tags: [Medical History]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Medical history list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalHistoryListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Patient profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/medical-history/{encounterId}:
+    get:
+      summary: Get encounter details
+      description: |
+        **Role:** PATIENT
+
+        Returns the full details of a specific encounter including symptoms,
+        diagnoses, and prescribed medications.
+      tags: [Medical History]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+      responses:
+        '200':
+          description: Full encounter detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncounterDetailResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Encounter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # REMINDERS
+  # --------------------------------------------------------------------------
+  /patient/reminders:
+    get:
+      summary: List all active reminders
+      description: |
+        **Role:** PATIENT
+
+        Returns all active reminders (medications, appointments, medical orders)
+        for the authenticated patient, grouped by type.
+      tags: [Reminders]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Active reminders list (grouped)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListRemindersResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/reminders/active:
+    get:
+      summary: List all active reminders (alias)
+      description: |
+        **Role:** PATIENT
+
+        Identical to GET /patient/reminders. Returns all active reminders grouped by type.
+      tags: [Reminders]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Active reminders list (grouped)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListRemindersResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/home/reminders/counters:
+    get:
+      summary: Get home reminder counters
+      description: |
+        **Role:** PATIENT
+
+        Returns counts of active medication reminders, upcoming appointments,
+        and pending test orders for the patient's home screen.
+      tags: [Reminders]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Reminder counters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeReminderCountersResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/home/today-schedule:
+    get:
+      summary: Get today's schedule
+      description: |
+        **Role:** PATIENT
+
+        Returns the patient's scheduled items for today (medication times,
+        appointments, pending test orders) sorted by time.
+      tags: [Reminders]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Today's schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayScheduleResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/reminders/{reminderId}:
+    patch:
+      summary: Update or dismiss a reminder
+      description: |
+        **Role:** PATIENT
+
+        Updates a reminder's time, custom days, or dismisses it (is_active=false).
+        Only medication reminders can customize reminder_time or custom_days.
+        Only medical order reminders can be dismissed by the patient.
+      tags: [Reminders]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ReminderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReminderRequest'
+      responses:
+        '200':
+          description: Reminder updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateReminderResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Reminder not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # NOTIFICATIONS
+  # --------------------------------------------------------------------------
+  /patient/notifications:
+    get:
+      summary: List all notifications
+      description: |
+        **Role:** PATIENT
+
+        Returns all notifications for the authenticated patient, ordered by
+        created date descending.
+      tags: [Notifications]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListNotificationsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/notifications/pending:
+    get:
+      summary: Consume pending notifications
+      description: |
+        **Role:** PATIENT
+
+        Atomically fetches and marks all due (scheduled_for <= NOW) pending
+        notifications as SENT. Used by the mobile app to pull new notifications
+        that are ready to be displayed.
+      tags: [Notifications]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Pending notifications consumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListNotificationsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/notifications/{notificationId}/read:
+    patch:
+      summary: Mark notification as read
+      description: |
+        **Role:** PATIENT
+
+        Marks a single notification as READ.
+      tags: [Notifications]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkNotificationReadResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # HEALTH JOURNAL
+  # --------------------------------------------------------------------------
+  /patient/health-journal/diagnoses:
+    get:
+      summary: List active diagnoses for health journal
+      description: |
+        **Role:** PATIENT
+
+        Returns all active diagnoses that the patient can write health journal
+        entries about.
+      tags: [Health Journal]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Active diagnoses list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalDiagnosesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/health-journal/notes:
+    post:
+      summary: Create a health journal entry
+      description: |
+        **Role:** PATIENT
+
+        Creates a new health journal note for a specific diagnosis. Also
+        generates an AI health snapshot (urgency level, summary, advice,
+        watchouts, when to contact doctor) using the patient's medical context
+        if GEMINI_API_KEY is configured.
+      tags: [Health Journal]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHealthJournalEntryRequest'
+      responses:
+        '201':
+          description: Health journal entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateHealthJournalEntryResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Patient or diagnosis not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List health journal diagnoses summary
+      description: |
+        **Role:** PATIENT
+
+        Returns a summary of all diagnoses that have health journal entries,
+        including total entry count, last entry date, and the last recorded
+        outcome, pain level, energy level, and mood.
+      tags: [Health Journal]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Health journal diagnoses summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalDiagnosesSummaryResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/health-journal/notes/{diagnosisId}:
+    get:
+      summary: List health journal notes for a diagnosis
+      description: |
+        **Role:** PATIENT
+
+        Returns all health journal notes for a specific diagnosis, ordered by
+        note date descending.
+      tags: [Health Journal]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/DiagnosisId'
+      responses:
+        '200':
+          description: Health journal notes list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalNotesListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Diagnosis not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # PROFILE PICTURE
+  # --------------------------------------------------------------------------
+  /patient/profile-picture:
+    post:
+      summary: Upload profile picture
+      description: |
+        **Role:** PATIENT
+
+        Uploads a profile picture for the patient. Accepts common image formats
+        (JPEG, PNG, WebP). Max file size of 5 MB.
+      tags: [Profile Picture]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [profilePicture]
+              properties:
+                profilePicture:
+                  type: string
+                  format: binary
+                  description: Profile picture file (image)
+      responses:
+        '201':
+          description: Profile picture uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Bad request - no file uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Get profile picture
+      description: |
+        **Role:** PATIENT
+
+        Streams the patient's current profile picture file inline.
+      tags: [Profile Picture]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Profile picture file stream
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No profile picture set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # --------------------------------------------------------------------------
+  # EMERGENCY CONTACTS
+  # --------------------------------------------------------------------------
+  /patient/emergency-contacts:
+    post:
+      summary: Add emergency contact
+      description: |
+        **Role:** PATIENT
+
+        Adds an emergency contact for the patient. If isPrimary is true, any
+        existing primary contact is demoted to non-primary.
+      tags: [Emergency Contacts]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddEmergencyContactRequest'
+      responses:
+        '201':
+          description: Emergency contact added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddEmergencyContactResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/emergency-contacts/{contactId}:
+    delete:
+      summary: Remove emergency contact
+      description: |
+        **Role:** PATIENT
+
+        Removes an emergency contact by ID.
+      tags: [Emergency Contacts]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ContactId'
+      responses:
+        '200':
+          description: Emergency contact removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Emergency contact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  # --------------------------------------------------------------------------
+  # SECURITY SCHEMES
+  # --------------------------------------------------------------------------
+  securitySchemes:
+    UserBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Standard user JWT access token for patients
+
+  # --------------------------------------------------------------------------
+  # REUSABLE PARAMETERS
+  # --------------------------------------------------------------------------
+  parameters:
+    EncounterId:
+      name: encounterId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Clinical encounter UUID
+
+    ReminderId:
+      name: reminderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Reminder UUID
+
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Notification UUID
+
+    DiagnosisId:
+      name: diagnosisId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Diagnosis UUID
+
+    ContactId:
+      name: contactId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Emergency contact UUID
+
+  # --------------------------------------------------------------------------
+  # SCHEMAS
+  # --------------------------------------------------------------------------
+  schemas:
+    # --- Enums ---
+    ReminderType:
+      type: string
+      enum: [MEDICATION, APPOINTMENT, MEDICAL_ORDER]
+
+    NotificationStatus:
+      type: string
+      enum: [PENDING, SENT, READ]
+
+    NotificationType:
+      type: string
+      enum: [SYSTEM, REMINDER]
+
+    PatientOutcome:
+      type: string
+      enum: [FULLY_RECOVERED, IMPROVED, NO_CHANGE, WORSE]
+
+    BloodType:
+      type: string
+      enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', UNKNOWN]
+
+    EmergencyContactRelationship:
+      type: string
+      enum: [PARENT, SPOUSE, SIBLING, FRIEND, CAREGIVER, OTHER]
+
+    HealthSnapshotUrgency:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, UNKNOWN]
+
+    # --- Common ---
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+        statusCode:
+          type: integer
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    # --- Medical Identity ---
+    MedicalIdentityResponse:
+      type: object
+      properties:
+        basicInfo:
+          type: object
+          properties:
+            age:
+              type: integer
+            gender:
+              type: string
+            bloodType:
+              type: string
+              nullable: true
+            weightKg:
+              type: number
+              nullable: true
+            heightCm:
+              type: number
+              nullable: true
+            bmi:
+              type: number
+              nullable: true
+        activeDiagnoses:
+          type: array
+          items:
+            type: object
+            properties:
+              diagnosisId:
+                type: string
+                format: uuid
+              icd11Title:
+                type: string
+                nullable: true
+              icd11Code:
+                type: string
+                nullable: true
+              diagnosedBy:
+                type: string
+                nullable: true
+              diagnosedDate:
+                type: string
+                format: date
+                nullable: true
+        currentMedications:
+          type: array
+          items:
+            type: object
+            properties:
+              medicationName:
+                type: string
+                nullable: true
+              dosageAmount:
+                type: number
+                nullable: true
+              dosageUnit:
+                type: string
+                nullable: true
+              form:
+                type: string
+                nullable: true
+              frequency:
+                type: string
+                nullable: true
+              startDate:
+                type: string
+                format: date
+                nullable: true
+              endDate:
+                type: string
+                format: date
+                nullable: true
+              prescribedBy:
+                type: string
+                nullable: true
+              prescribedAt:
+                type: string
+                format: date-time
+                nullable: true
+        allergies:
+          type: array
+          items:
+            type: object
+            properties:
+              allergenName:
+                type: string
+                nullable: true
+              icd11Title:
+                type: string
+                nullable: true
+              severity:
+                type: string
+                nullable: true
+              reactionDescription:
+                type: string
+                nullable: true
+              diagnosedBy:
+                type: string
+                nullable: true
+              diagnosedDate:
+                type: string
+                format: date
+                nullable: true
+        chronicConditions:
+          type: array
+          items:
+            type: object
+            properties:
+              diagnosisId:
+                type: string
+                format: uuid
+              icd11Title:
+                type: string
+                nullable: true
+              icd11Code:
+                type: string
+                nullable: true
+              diagnosedBy:
+                type: string
+                nullable: true
+              diagnosedDate:
+                type: string
+                format: date
+                nullable: true
+        emergencyContacts:
+          type: array
+          items:
+            type: object
+            properties:
+              contactId:
+                type: string
+                format: uuid
+              contactName:
+                type: string
+              relationship:
+                type: string
+              phoneNumber:
+                type: string
+              isPrimary:
+                type: boolean
+
+    # --- Medical History ---
+    MedicalHistoryListResponse:
+      type: object
+      properties:
+        encounters:
+          type: array
+          items:
+            type: object
+            properties:
+              encounterId:
+                type: string
+                format: uuid
+              doctorName:
+                type: string
+                nullable: true
+              doctorSpeciality:
+                type: string
+                nullable: true
+              encounterDate:
+                type: string
+                format: date-time
+                nullable: true
+              location:
+                type: string
+                nullable: true
+              primaryDiagnosis:
+                type: object
+                nullable: true
+                properties:
+                  icd11Code:
+                    type: string
+                    nullable: true
+                  icd11Title:
+                    type: string
+                    nullable: true
+
+    EncounterDetailResponse:
+      type: object
+      properties:
+        encounter:
+          type: object
+          properties:
+            encounterId:
+              type: string
+              format: uuid
+            doctorName:
+              type: string
+              nullable: true
+            doctorSpeciality:
+              type: string
+              nullable: true
+            encounterDate:
+              type: string
+              format: date-time
+              nullable: true
+            location:
+              type: string
+              nullable: true
+            primaryDiagnosis:
+              type: object
+              nullable: true
+              properties:
+                icd11Code:
+                  type: string
+                  nullable: true
+                icd11Title:
+                  type: string
+                  nullable: true
+            symptomsAndComplaints:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+            diagnoses:
+              type: array
+              items:
+                type: object
+                properties:
+                  icd11Code:
+                    type: string
+                    nullable: true
+                  icd11Title:
+                    type: string
+                    nullable: true
+                  clinicalDescription:
+                    type: string
+                    nullable: true
+            prescribedMedications:
+              type: array
+              items:
+                type: object
+                properties:
+                  medicationName:
+                    type: string
+                    nullable: true
+                  dosageAmount:
+                    type: number
+                    nullable: true
+                  dosageUnit:
+                    type: string
+                    nullable: true
+                  form:
+                    type: string
+                    nullable: true
+                  frequency:
+                    type: string
+                    nullable: true
+                  instructions:
+                    type: string
+                    nullable: true
+                  startDate:
+                    type: string
+                    format: date
+                    nullable: true
+                  endDate:
+                    type: string
+                    format: date
+                    nullable: true
+
+    # --- Reminders ---
+    ListRemindersResponse:
+      type: object
+      properties:
+        reminders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reminder'
+        grouped:
+          type: object
+          properties:
+            appointments:
+              type: array
+              items:
+                $ref: '#/components/schemas/Reminder'
+            medications:
+              type: array
+              items:
+                $ref: '#/components/schemas/Reminder'
+            medicalOrders:
+              type: array
+              items:
+                $ref: '#/components/schemas/Reminder'
+
+    Reminder:
+      type: object
+      properties:
+        reminderId:
+          type: string
+          format: uuid
+        reminderType:
+          $ref: '#/components/schemas/ReminderType'
+        startsAt:
+          type: string
+          format: date
+          nullable: true
+        endsAt:
+          type: string
+          format: date
+          nullable: true
+        appointmentAt:
+          type: string
+          format: date-time
+          nullable: true
+        reminderTime:
+          type: string
+          nullable: true
+        customDays:
+          type: array
+          items:
+            type: integer
+          nullable: true
+        isActive:
+          type: boolean
+        dismissedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        medication:
+          type: object
+          nullable: true
+          properties:
+            medicationId:
+              type: string
+              format: uuid
+              nullable: true
+            name:
+              type: string
+              nullable: true
+            dosageAmount:
+              type: number
+              nullable: true
+            dosageUnit:
+              type: string
+              nullable: true
+            form:
+              type: string
+              nullable: true
+            frequency:
+              type: string
+              nullable: true
+            startDate:
+              type: string
+              format: date
+              nullable: true
+            endDate:
+              type: string
+              format: date
+              nullable: true
+            prescribedBy:
+              type: string
+              nullable: true
+        appointment:
+          type: object
+          nullable: true
+          properties:
+            encounterId:
+              type: string
+              format: uuid
+              nullable: true
+            doctorName:
+              type: string
+              nullable: true
+            location:
+              type: string
+              nullable: true
+            notes:
+              type: string
+              nullable: true
+        medicalOrder:
+          type: object
+          nullable: true
+          properties:
+            medicalOrderId:
+              type: string
+              format: uuid
+              nullable: true
+            orderType:
+              type: string
+              nullable: true
+            orderName:
+              type: string
+              nullable: true
+            priority:
+              type: string
+              nullable: true
+            status:
+              type: string
+              nullable: true
+            orderedAt:
+              type: string
+              format: date-time
+              nullable: true
+            orderedBy:
+              type: string
+              nullable: true
+            specimenType:
+              type: string
+              nullable: true
+            bodyPart:
+              type: string
+              nullable: true
+
+    HomeReminderCountersResponse:
+      type: object
+      properties:
+        counters:
+          type: object
+          properties:
+            medicationReminders:
+              type: integer
+            upcomingAppointments:
+              type: integer
+            pendingTestOrders:
+              type: integer
+
+    TodayScheduleResponse:
+      type: object
+      properties:
+        schedule:
+          type: array
+          items:
+            type: object
+            properties:
+              time:
+                type: string
+                description: Formatted time (HH12:MI AM)
+              what:
+                type: string
+              kind:
+                $ref: '#/components/schemas/ReminderType'
+
+    UpdateReminderRequest:
+      type: object
+      properties:
+        reminder_time:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$'
+          description: New reminder time (24h format, HH:MM or HH:MM:SS). Only for MEDICATION reminders.
+        reminderTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$'
+        custom_days:
+          type: array
+          nullable: true
+          maxItems: 7
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+          description: Custom days of week (1=Mon..7=Sun). Only for MEDICATION reminders.
+        customDays:
+          type: array
+          nullable: true
+          maxItems: 7
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+        is_active:
+          type: boolean
+          description: Set to false to dismiss a MEDICAL_ORDER reminder.
+        isActive:
+          type: boolean
+
+    UpdateReminderResponse:
+      type: object
+      properties:
+        reminder:
+          $ref: '#/components/schemas/Reminder'
+
+    # --- Notifications ---
+    ListNotificationsResponse:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+
+    Notification:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        notificationType:
+          $ref: '#/components/schemas/NotificationType'
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        title:
+          type: string
+        message:
+          type: string
+        reminderId:
+          type: string
+          format: uuid
+          nullable: true
+        scheduledFor:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    MarkNotificationReadResponse:
+      type: object
+      properties:
+        notification:
+          $ref: '#/components/schemas/Notification'
+
+    # --- Health Journal ---
+    JournalDiagnosesResponse:
+      type: object
+      properties:
+        diagnoses:
+          type: array
+          items:
+            type: object
+            properties:
+              diagnosisId:
+                type: string
+                format: uuid
+              icd11Code:
+                type: string
+                nullable: true
+              icd11Title:
+                type: string
+                nullable: true
+              clinicalDescription:
+                type: string
+                nullable: true
+              isChronic:
+                type: boolean
+              diagnosedBy:
+                type: string
+                nullable: true
+              diagnosedDate:
+                type: string
+                format: date
+                nullable: true
+
+    CreateHealthJournalEntryRequest:
+      type: object
+      required: [diagnosisId, patientOutcome, painLevel, energyLevel, mood]
+      properties:
+        diagnosisId:
+          type: string
+          format: uuid
+          maxLength: 64
+        patientOutcome:
+          $ref: '#/components/schemas/PatientOutcome'
+        patientOutcomeDetails:
+          type: string
+          nullable: true
+        painLevel:
+          type: integer
+          minimum: 0
+          maximum: 10
+        energyLevel:
+          type: integer
+          minimum: 0
+          maximum: 10
+        mood:
+          type: string
+          maxLength: 2000
+
+    CreateHealthJournalEntryResponse:
+      type: object
+      properties:
+        entry:
+          type: object
+          properties:
+            noteId:
+              type: string
+              format: uuid
+            patientId:
+              type: string
+              format: uuid
+            diagnosisId:
+              type: string
+              format: uuid
+            noteDate:
+              type: string
+              format: date
+            patientOutcome:
+              type: string
+              nullable: true
+            patientOutcomeDetails:
+              type: string
+              nullable: true
+            mood:
+              type: string
+              nullable: true
+            painLevel:
+              type: integer
+              nullable: true
+            energyLevel:
+              type: integer
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            diagnosis:
+              type: object
+              properties:
+                diagnosisId:
+                  type: string
+                  format: uuid
+                icd11Code:
+                  type: string
+                  nullable: true
+                icd11Title:
+                  type: string
+                  nullable: true
+                clinicalDescription:
+                  type: string
+                  nullable: true
+                isChronic:
+                  type: boolean
+                diagnosedBy:
+                  type: string
+                  nullable: true
+                diagnosedDate:
+                  type: string
+                  format: date
+                  nullable: true
+        healthSnapshot:
+          $ref: '#/components/schemas/HealthSnapshot'
+
+    HealthSnapshot:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [READY, UNAVAILABLE]
+        model:
+          type: string
+          nullable: true
+        urgencyLevel:
+          $ref: '#/components/schemas/HealthSnapshotUrgency'
+        summary:
+          type: string
+          nullable: true
+        advice:
+          type: array
+          items:
+            type: string
+        watchouts:
+          type: array
+          items:
+            type: string
+        whenToContactDoctor:
+          type: array
+          items:
+            type: string
+        disclaimer:
+          type: string
+        unavailableReason:
+          type: string
+
+    JournalDiagnosesSummaryResponse:
+      type: object
+      properties:
+        diagnoses:
+          type: array
+          items:
+            type: object
+            properties:
+              diagnosisId:
+                type: string
+                format: uuid
+              icd11Code:
+                type: string
+                nullable: true
+              icd11Title:
+                type: string
+                nullable: true
+              isChronic:
+                type: boolean
+              totalEntries:
+                type: integer
+              lastEntryDate:
+                type: string
+                format: date
+                nullable: true
+              lastEntry:
+                type: object
+                nullable: true
+                properties:
+                  patientOutcome:
+                    type: string
+                    nullable: true
+                  painLevel:
+                    type: integer
+                    nullable: true
+                  energyLevel:
+                    type: integer
+                    nullable: true
+                  mood:
+                    type: string
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+    JournalNotesListResponse:
+      type: object
+      properties:
+        diagnosis:
+          type: object
+          properties:
+            diagnosisId:
+              type: string
+              format: uuid
+            icd11Code:
+              type: string
+              nullable: true
+            icd11Title:
+              type: string
+              nullable: true
+            isChronic:
+              type: boolean
+            status:
+              type: string
+        notes:
+          type: array
+          items:
+            type: object
+            properties:
+              noteId:
+                type: string
+                format: uuid
+              noteDate:
+                type: string
+                format: date
+              patientOutcome:
+                type: string
+                nullable: true
+              patientOutcomeDetails:
+                type: string
+                nullable: true
+              mood:
+                type: string
+                nullable: true
+              painLevel:
+                type: integer
+                nullable: true
+              energyLevel:
+                type: integer
+                nullable: true
+              createdAt:
+                type: string
+                format: date-time
+
+    # --- Emergency Contacts ---
+    AddEmergencyContactRequest:
+      type: object
+      required: [contactName, phoneNumber, relationship]
+      properties:
+        contactName:
+          type: string
+          maxLength: 200
+        phoneNumber:
+          type: string
+          maxLength: 20
+        relationship:
+          $ref: '#/components/schemas/EmergencyContactRelationship'
+        isPrimary:
+          type: boolean
+          default: false
+
+    AddEmergencyContactResponse:
+      type: object
+      properties:
+        contact:
+          type: object
+          properties:
+            contactId:
+              type: string
+              format: uuid
+            contactName:
+              type: string
+            phoneNumber:
+              type: string
+            relationship:
+              type: string
+            isPrimary:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
