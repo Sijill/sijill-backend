@@ -808,7 +808,7 @@ export class ClinicalRepository {
 						mo.order_status AS medical_order_status
 					FROM patient_permission_tokens ppt
 					INNER JOIN patients p ON p.id = ppt.patient_id
-					LEFT JOIN medical_orders mo
+					INNER JOIN medical_orders mo
 						ON mo.id = ppt.medical_order_id
 						AND mo.patient_id = ppt.patient_id
 					WHERE ppt.code_hash = $1
@@ -975,7 +975,7 @@ export class ClinicalRepository {
 						mo.order_status AS medical_order_status
 					FROM patient_permission_tokens ppt
 					INNER JOIN patients p ON p.id = ppt.patient_id
-					LEFT JOIN medical_orders mo
+					INNER JOIN medical_orders mo
 						ON mo.id = ppt.medical_order_id
 						AND mo.patient_id = ppt.patient_id
 					WHERE ppt.code_hash = $1
