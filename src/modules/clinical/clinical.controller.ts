@@ -11,6 +11,8 @@ import {
 	Patch,
 	Post,
 	Query,
+	Res,
+	StreamableFile,
 	UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@guards/auth.guard';
@@ -28,6 +30,7 @@ import { CreateEncounterDto } from './dto/create-encounter.dto';
 import { ClinicalSessionGuard } from './guards/clinical-session.guard';
 import { CurrentClinicalSession } from './decorators/current-clinical-session.decorator';
 import type { ClinicalSessionTokenPayload } from './types/clinical-session.type';
+import type { Response } from 'express';
 
 @Controller('api/v1/clinical')
 export class ClinicalController {
@@ -163,5 +166,20 @@ export class ClinicalController {
 		@Body() dto: CreateEncounterDto,
 	) {
 		return await this.clinicalService.createEncounter(session, dto);
+	}
+
+	@Get('sessions/:sessionId/documents/:documentId')
+	@UseGuards(ClinicalSessionGuard)
+	async getClinicalDocument(
+		@Param('sessionId', ParseUUIDPipe) _sessionId: string,
+		@Param('documentId', ParseUUIDPipe) documentId: string,
+		@CurrentClinicalSession() session: ClinicalSessionTokenPayload,
+		@Res({ passthrough: true }) res: Response,
+	): Promise<StreamableFile> {
+		return await this.clinicalService.getClinicalDocument(
+			session,
+			documentId,
+			res,
+		);
 	}
 }

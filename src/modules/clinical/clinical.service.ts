@@ -4,6 +4,7 @@ import {
 	Injectable,
 	InternalServerErrorException,
 	NotFoundException,
+	StreamableFile,
 } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import * as crypto from 'crypto';
@@ -25,6 +26,10 @@ import type {
 	ImagingSessionTokenPayload,
 	LabSessionTokenPayload,
 } from './types/diagnostic-session.type';
+import { createReadStream } from 'fs';
+import { stat } from 'fs/promises';
+import * as path from 'path';
+import type { Response } from 'express';
 
 @Injectable()
 export class ClinicalService {
@@ -74,7 +79,7 @@ export class ClinicalService {
 						accessType: row.access_type,
 						expiresAt: row.expires_at,
 					};
-				} catch (error) {
+				} catch (error: any) {
 					if (error.code === '23505') {
 						continue;
 					}
@@ -287,7 +292,7 @@ export class ClinicalService {
 						expiresAt: row.expires_at,
 						medicalOrderId: orderId,
 					};
-				} catch (error) {
+				} catch (error: any) {
 					if (error.code === '23505') {
 						continue;
 					}
@@ -801,6 +806,44 @@ export class ClinicalService {
 			const detail =
 				await this.clinicalRepository.getEncounterDetail(encounterId);
 
+			const sessionId = session.sessionId;
+
+			const orders = detail.orders.map((order: any) => ({
+				...order,
+				labOrder: order.labOrder
+					? {
+							...order.labOrder,
+							result: order.labOrder.result
+								? {
+										...order.labOrder.result,
+										documents: (order.labOrder.result.documents ?? []).map(
+											(doc: any) => ({
+												...doc,
+												url: `/api/v1/clinical/sessions/${sessionId}/documents/${doc.documentId}`,
+											}),
+										),
+									}
+								: null,
+						}
+					: null,
+				imagingOrder: order.imagingOrder
+					? {
+							...order.imagingOrder,
+							result: order.imagingOrder.result
+								? {
+										...order.imagingOrder.result,
+										documents: (order.imagingOrder.result.documents ?? []).map(
+											(doc: any) => ({
+												...doc,
+												url: `/api/v1/clinical/sessions/${sessionId}/documents/${doc.documentId}`,
+											}),
+										),
+									}
+								: null,
+						}
+					: null,
+			}));
+
 			return {
 				encounterId: encounterMeta.encounter_id,
 				hcpFullName: encounterMeta.hcp_full_name,
@@ -812,7 +855,7 @@ export class ClinicalService {
 				symptoms: detail.symptoms,
 				diagnoses: detail.diagnoses,
 				medications: detail.medications,
-				orders: detail.orders,
+				orders,
 			};
 		} catch (error) {
 			this.rethrowKnown(error);
@@ -982,6 +1025,44 @@ export class ClinicalService {
 			'sijill-clinical-secret';
 
 		return crypto.createHmac('sha256', secret).update(code).digest('hex');
+	}
+
+	async getClinicalDocument(
+		payload: ClinicalSessionTokenPayload,
+		documentId: string,
+		res: Response,
+	): Promise<StreamableFile> {
+		const session = await this.assertValidSession(payload);
+
+		const document = await this.clinicalRepository.getClinicalDocument(
+			documentId,
+			session.patientId,
+		);
+
+		if (!document) {
+			throw new NotFoundException('Document not found.');
+		}
+
+		const fullPath = path.resolve(process.cwd(), document.file_path);
+
+		try {
+			await stat(fullPath);
+		} catch {
+			throw new NotFoundException('Document file not found on disk.');
+		}
+
+		const isImage = document.mime_type.startsWith('image/');
+		const isPdf = document.mime_type === 'application/pdf';
+
+		res.set({
+			'Content-Type': document.mime_type,
+			'Content-Disposition':
+				isImage || isPdf
+					? `inline; filename="${document.file_name}"`
+					: `attachment; filename="${document.file_name}"`,
+		});
+
+		return new StreamableFile(createReadStream(fullPath));
 	}
 
 	private rethrowKnown(error: any): never | void {

@@ -2351,6 +2351,41 @@ export class ClinicalRepository {
 		return accessType.toLowerCase().replace(/_/g, ' ');
 	}
 
+	async getClinicalDocument(documentId: string, patientId: string) {
+		const { rows } = await this.databaseService.query(
+			`
+				SELECT
+					d.id,
+					d.file_path,
+					d.file_name,
+					d.mime_type,
+					d.file_size_bytes
+				FROM documents d
+				WHERE d.id = $1
+					AND (
+						EXISTS (
+							SELECT 1
+							FROM lab_result_documents lrd
+							INNER JOIN lab_results lr ON lr.id = lrd.lab_result_id
+							INNER JOIN medical_orders mo ON mo.id = lr.order_id
+							WHERE lrd.document_id = d.id AND mo.patient_id = $2
+						)
+						OR
+						EXISTS (
+							SELECT 1
+							FROM imaging_result_documents ird
+							INNER JOIN imaging_results ir ON ir.id = ird.imaging_result_id
+							INNER JOIN medical_orders mo ON mo.id = ir.order_id
+							WHERE ird.document_id = d.id AND mo.patient_id = $2
+						)
+					)
+			`,
+			[documentId, patientId],
+		);
+
+		return rows[0] ?? null;
+	}
+
 	private mapDocumentReference(row: any) {
 		return {
 			documentId: row.document_id,
