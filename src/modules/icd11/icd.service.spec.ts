@@ -53,7 +53,7 @@ describe('IcdService', () => {
 
 		expect(global.fetch).toHaveBeenCalledWith(
 			new URL(
-				'http://icd-api/icd/release/11/2026-01/mms/search?q=asth&highlightingEnabled=false&medicalCodingMode=true',
+				'http://icd-api/icd/release/11/2026-01/mms/search?q=asth%25&highlightingEnabled=false&medicalCodingMode=true',
 			),
 			{
 				headers: {

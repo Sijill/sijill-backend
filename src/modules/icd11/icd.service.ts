@@ -38,7 +38,9 @@ export class IcdService {
 		const baseUrl = process.env.ICD_API_URL ?? 'http://localhost:8081';
 		const url = new URL('/icd/release/11/2026-01/mms/search', baseUrl);
 
-		url.searchParams.set('q', query);
+		const words = query.trim().split(/\s+/);
+		words[words.length - 1] += '%';
+		url.searchParams.set('q', words.join(' '));
 		url.searchParams.set('highlightingEnabled', 'false');
 		url.searchParams.set('medicalCodingMode', 'true');
 
