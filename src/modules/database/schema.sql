@@ -1114,6 +1114,35 @@ INSERT INTO lab_orders (
     'Monitor HbA1c after the initial diabetes diagnosis and metformin start.'
 );
 
+INSERT INTO medical_orders (
+    id, encounter_id, patient_id, ordered_by_hcp_id,
+    order_type, order_status,
+    ordered_at, completed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000071',
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000011',
+    'IMAGING',
+    'PENDING',
+    '2026-06-11 14:00:00+00',
+    NULL,
+    now(), now()
+);
+
+INSERT INTO imaging_orders (
+    medical_order_id, imaging_type_id, body_part_id,
+    contrast_used, priority, clinical_indication
+) VALUES (
+    '00000000-0000-0000-0000-000000000071',
+    3,
+    3,
+    FALSE,
+    'ROUTINE',
+    'Evaluate new-onset headaches with associated visual disturbances.'
+);
+
 -- -------------------------------------------------------------
 -- 7. Reminders
 --    - One for each reminder type
