@@ -746,6 +746,33 @@ CREATE TABLE patient_access_grants (
 );
 
 ------------------------------
+------- AI CHAT TABLES --------
+------------------------------
+
+CREATE TABLE ai_chat_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL REFERENCES patients(id),
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'ARCHIVED')),
+    title VARCHAR(300),
+    message_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ai_chat_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL REFERENCES ai_chat_sessions(id) ON DELETE CASCADE,
+    role VARCHAR(10) NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_ai_chat_sessions_patient ON ai_chat_sessions(patient_id, status);
+CREATE INDEX idx_ai_chat_messages_session ON ai_chat_messages(session_id, created_at);
+
+------------------------------
 ---------- SEED DATA ----------
 ------------------------------
 

@@ -11,6 +11,7 @@ info:
       - Health journal (diagnoses, notes, AI health snapshots)
       - Profile picture upload & retrieval
       - Emergency contact management (add/remove)
+      - AI Chat Assistant (chat sessions, messaging, AI-powered health Q&A)
 
     ## Authentication
     All endpoints require a standard user JWT access token with the PATIENT role.
@@ -629,6 +630,263 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # --------------------------------------------------------------------------
+  # AI CHAT ASSISTANT
+  # --------------------------------------------------------------------------
+  /patient/ai/chat/sessions:
+    post:
+      summary: Create a new chat session
+      description: |
+        **Role:** PATIENT
+
+        Creates a new AI chat session for the patient. If no title is provided,
+        it will be auto-generated from the first message sent in the session.
+      tags: [AI Chat]
+      security: [{ UserBearerAuth: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
+        '400':
+          description: Bad request - max sessions reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Patient profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List chat sessions
+      description: |
+        **Role:** PATIENT
+
+        Returns all chat sessions for the authenticated patient, ordered by
+        most recently updated. Each session includes a preview of the last
+        assistant message.
+      tags: [AI Chat]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, ARCHIVED]
+          description: Filter by session status
+      responses:
+        '200':
+          description: Chat sessions list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSessionsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete all chat sessions
+      description: |
+        **Role:** PATIENT
+
+        Permanently deletes all chat sessions and their messages for the authenticated patient.
+      tags: [AI Chat]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Sessions deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteAllSessionsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Patient profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/ai/chat/sessions/{sessionId}:
+    get:
+      summary: Get chat session with messages
+      description: |
+        **Role:** PATIENT
+
+        Returns a specific chat session with all its messages ordered by creation time.
+      tags: [AI Chat]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Chat session with messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetSessionResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Update chat session (archive / rename)
+      description: |
+        **Role:** PATIENT
+
+        Updates the session status (ACTIVE/ARCHIVED) or title.
+      tags: [AI Chat]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSessionRequest'
+      responses:
+        '200':
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateSessionResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Archive a chat session
+      description: |
+        **Role:** PATIENT
+
+        Archives (soft-deletes) a chat session by setting its status to ARCHIVED.
+      tags: [AI Chat]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteSessionResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/ai/chat/sessions/{sessionId}/messages:
+    post:
+      summary: Send a message to the AI assistant
+      description: |
+        **Role:** PATIENT
+
+        Sends a message in an active chat session and receives an AI-generated
+        response. The AI has access to the patient's medical data (diagnoses,
+        medications, allergies, etc.) and conversation history.
+
+        **Rate limit:** 10 messages per minute per patient.
+      tags: [AI Chat]
+      security: [{ UserBearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResponse'
+        '400':
+          description: Bad request - validation error or max messages reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   # --------------------------------------------------------------------------
   # SECURITY SCHEMES
@@ -688,6 +946,15 @@ components:
         type: string
         format: uuid
       description: Emergency contact UUID
+
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: AI chat session UUID
 
   # --------------------------------------------------------------------------
   # SCHEMAS
@@ -1464,9 +1731,210 @@ components:
                   mood:
                     type: string
                     nullable: true
-                  createdAt:
-                    type: string
-                    format: date-time
+            createdAt:
+              type: string
+              format: date-time
+
+    # --- AI Chat ---
+    CreateSessionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 300
+          description: Optional session title. Auto-generated from first message if omitted.
+
+    CreateSessionResponse:
+      type: object
+      properties:
+        session:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [ACTIVE, ARCHIVED]
+            title:
+              type: string
+              nullable: true
+            messageCount:
+              type: integer
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    SessionSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+        title:
+          type: string
+          nullable: true
+        messageCount:
+          type: integer
+        lastMessagePreview:
+          type: string
+          nullable: true
+          maxLength: 120
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ListSessionsResponse:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionSummary'
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    GetSessionResponse:
+      type: object
+      properties:
+        session:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [ACTIVE, ARCHIVED]
+            title:
+              type: string
+              nullable: true
+            messageCount:
+              type: integer
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+
+    UpdateSessionRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+          description: New session status
+        title:
+          type: string
+          maxLength: 300
+          description: New session title
+
+    UpdateSessionResponse:
+      type: object
+      properties:
+        session:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [ACTIVE, ARCHIVED]
+            title:
+              type: string
+              nullable: true
+            messageCount:
+              type: integer
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    DeleteAllSessionsResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        deletedCount:
+          type: integer
+
+    DeleteSessionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    SendMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: The patient's question or message
+
+    SendMessageResponse:
+      type: object
+      properties:
+        userMessage:
+          $ref: '#/components/schemas/ChatMessage'
+        assistantMessage:
+          $ref: '#/components/schemas/ChatMessage'
+        session:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            messageCount:
+              type: integer
+            title:
+              type: string
+              nullable: true
+        meta:
+          type: object
+          properties:
+            model:
+              type: string
+            latencyMs:
+              type: integer
                     nullable: true
 
     JournalNotesListResponse:

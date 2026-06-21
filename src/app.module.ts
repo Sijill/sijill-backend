@@ -10,6 +10,7 @@ import { AdminModule } from '@modules/admin/admin.module';
 import { ClinicalModule } from '@modules/clinical/clinical.module';
 import { IcdModule } from '@modules/icd11/icd.module';
 import { PatientModule } from '@modules/patient/patient.module';
+import { PatientAIModule } from '@modules/patient-ai/patient-ai.module';
 
 @Module({
 	imports: [
@@ -56,6 +57,7 @@ import { PatientModule } from '@modules/patient/patient.module';
 		ClinicalModule,
 		IcdModule,
 		PatientModule,
+		PatientAIModule,
 	],
 	exports: [],
 	controllers: [],
