@@ -1935,7 +1935,7 @@ components:
               type: string
             latencyMs:
               type: integer
-                    nullable: true
+              nullable: true
 
     JournalNotesListResponse:
       type: object
