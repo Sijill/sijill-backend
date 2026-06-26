@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Complete API documentation for the Patient (mobile app) module of Sijill. This module handles:
-      - Medical identity overview (basic info, active diagnoses, medications, allergies, chronic conditions, emergency contacts)
+      - Medical identity overview (name, basic info, active diagnoses, medications, allergies, chronic conditions, emergency contacts)
       - Medical history (encounter list & detail)
       - Reminders (list, counters, today schedule, update/dismiss)
       - Notifications (list, consume pending, mark read)
@@ -35,7 +35,7 @@ paths:
         **Role:** PATIENT
 
         Returns the patient's basic medical identity including age, gender, blood type,
-        BMI, active diagnoses, current medications, allergies, chronic conditions,
+        BMI, name, active diagnoses, current medications, allergies, chronic conditions,
         and emergency contacts.
       tags: [Medical Identity]
       security: [{ UserBearerAuth: [] }]
@@ -46,6 +46,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MedicalIdentityResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Patient profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /patient/name:
+    get:
+      summary: Get patient name
+      description: |
+        **Role:** PATIENT
+
+        Returns the patient's first, middle, and surname for UI display.
+      tags: [Medical Identity]
+      security: [{ UserBearerAuth: [] }]
+      responses:
+        '200':
+          description: Patient name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientNameResponse'
         '401':
           description: Unauthorized
           content:
@@ -385,9 +414,8 @@ paths:
         **Role:** PATIENT
 
         Creates a new health journal note for a specific diagnosis. Also
-        generates an AI health snapshot (urgency level, summary, advice,
-        watchouts, when to contact doctor) using the patient's medical context
-        if GEMINI_API_KEY is configured.
+        generates a short AI health note using the patient's medical context
+        through the local Ollama assistant.
       tags: [Health Journal]
       security: [{ UserBearerAuth: [] }]
       requestBody:
@@ -985,10 +1013,6 @@ components:
       type: string
       enum: [PARENT, SPOUSE, SIBLING, FRIEND, CAREGIVER, OTHER]
 
-    HealthSnapshotUrgency:
-      type: string
-      enum: [LOW, MEDIUM, HIGH, UNKNOWN]
-
     # --- Common ---
     ErrorResponse:
       type: object
@@ -1013,6 +1037,14 @@ components:
         basicInfo:
           type: object
           properties:
+            firstName:
+              type: string
+            middleName:
+              type: string
+            surname:
+              type: string
+            fullName:
+              type: string
             age:
               type: integer
             gender:
@@ -1028,6 +1060,9 @@ components:
               nullable: true
             bmi:
               type: number
+              nullable: true
+            profilePictureUrl:
+              type: string
               nullable: true
         activeDiagnoses:
           type: array
@@ -1068,6 +1103,9 @@ components:
                 type: string
                 nullable: true
               frequency:
+                type: string
+                nullable: true
+              instructions:
                 type: string
                 nullable: true
               startDate:
@@ -1146,6 +1184,21 @@ components:
                 type: string
               isPrimary:
                 type: boolean
+
+    PatientNameResponse:
+      type: object
+      properties:
+        name:
+          type: object
+          properties:
+            firstName:
+              type: string
+            middleName:
+              type: string
+            surname:
+              type: string
+            fullName:
+              type: string
 
     # --- Medical History ---
     MedicalHistoryListResponse:
@@ -1662,33 +1715,9 @@ components:
     HealthSnapshot:
       type: object
       properties:
-        status:
+        note:
           type: string
-          enum: [READY, UNAVAILABLE]
-        model:
-          type: string
-          nullable: true
-        urgencyLevel:
-          $ref: '#/components/schemas/HealthSnapshotUrgency'
-        summary:
-          type: string
-          nullable: true
-        advice:
-          type: array
-          items:
-            type: string
-        watchouts:
-          type: array
-          items:
-            type: string
-        whenToContactDoctor:
-          type: array
-          items:
-            type: string
-        disclaimer:
-          type: string
-        unavailableReason:
-          type: string
+      required: [note]
 
     JournalDiagnosesSummaryResponse:
       type: object

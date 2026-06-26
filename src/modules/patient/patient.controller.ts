@@ -44,6 +44,11 @@ export class PatientController {
 		return await this.patientService.getMedicalIdentity(user.userId);
 	}
 
+	@Get('name')
+	async getPatientName(@CurrentUser() user: CurrentUserType) {
+		return await this.patientService.getPatientName(user.userId);
+	}
+
 	@Get('medical-history')
 	async listMedicalHistory(@CurrentUser() user: CurrentUserType) {
 		return await this.patientService.listMedicalHistory(user.userId);

@@ -4,6 +4,9 @@ import { DatabaseService } from '@db/database.service';
 
 export interface PatientMedicalIdentitySnapshot {
 	basicInfo: {
+		firstName: string;
+		middleName: string;
+		surname: string;
 		fullName: string;
 		gender: string;
 		age: number;
@@ -27,6 +30,7 @@ export interface PatientMedicalIdentitySnapshot {
 		dosageUnit: string | null;
 		form: string | null;
 		frequency: string | null;
+		instructions: string | null;
 		startDate: string | null;
 		endDate: string | null;
 		prescribedBy: string | null;
@@ -71,6 +75,9 @@ export async function loadPatientMedicalIdentity(
 		databaseService.query(
 			`
 				SELECT
+					p.first_name,
+					p.middle_name,
+					p.surname,
 					TRIM(CONCAT_WS(' ', p.first_name, p.middle_name, p.surname)) AS full_name,
 					p.gender,
 					EXTRACT(YEAR FROM AGE(CURRENT_DATE, p.date_of_birth))::INT AS age,
@@ -117,6 +124,7 @@ export async function loadPatientMedicalIdentity(
 					m.dosage_unit,
 					m.form,
 					m.frequency,
+					m.instructions,
 					m.start_date,
 					m.end_date,
 					TRIM(CONCAT_WS(' ', h.first_name, h.middle_name, h.surname)) AS prescribed_by,
@@ -202,6 +210,9 @@ export async function loadPatientMedicalIdentity(
 
 	return {
 		basicInfo: {
+			firstName: basicInfo.first_name,
+			middleName: basicInfo.middle_name,
+			surname: basicInfo.surname,
 			fullName: basicInfo.full_name,
 			gender: basicInfo.gender,
 			age: Number(basicInfo.age),
@@ -226,6 +237,7 @@ export async function loadPatientMedicalIdentity(
 			dosageUnit: row.dosage_unit,
 			form: row.form,
 			frequency: row.frequency,
+			instructions: row.instructions,
 			startDate: row.start_date,
 			endDate: row.end_date,
 			prescribedBy: row.prescribed_by,

@@ -5,42 +5,23 @@ import type {
 	PatientHealthJournalSnapshotContext,
 } from './patient.repository';
 
-export type HealthSnapshotUrgency = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
-
 export interface PatientHealthSnapshot {
-	status: 'READY' | 'UNAVAILABLE';
-	model: string | null;
-	urgencyLevel: HealthSnapshotUrgency;
-	summary: string | null;
-	advice: string[];
-	watchouts: string[];
-	whenToContactDoctor: string[];
-	disclaimer: string;
-	unavailableReason?: string;
+	note: string;
 }
 
-interface GeminiGenerateContentResponse {
-	candidates?: Array<{
-		content?: {
-			parts?: Array<{
-				text?: string;
-			}>;
-		};
-	}>;
+interface OllamaChatResponse {
+	message?: {
+		content?: string;
+	};
 }
 
-interface ParsedHealthSnapshot {
-	urgencyLevel?: string;
-	summary?: string;
-	advice?: unknown;
-	watchouts?: unknown;
-	whenToContactDoctor?: unknown;
-	disclaimer?: string;
+interface ParsedHealthSnapshotNote {
+	note?: string;
 }
 
 @Injectable()
 export class PatientHealthSnapshotService {
-	private readonly defaultModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+	private readonly defaultModel = process.env.OLLAMA_MODEL || 'llama3.1:8b';
 
 	constructor(private readonly logger: PinoLogger) {
 		this.logger.setContext(PatientHealthSnapshotService.name);
@@ -50,42 +31,36 @@ export class PatientHealthSnapshotService {
 		context: PatientHealthJournalSnapshotContext;
 		currentNote: CreatedHealthJournalEntry;
 	}): Promise<PatientHealthSnapshot> {
-		const apiKey = process.env.GEMINI_API_KEY;
-		const model = process.env.GEMINI_MODEL || this.defaultModel;
-
-		if (!apiKey) {
-			return this.createUnavailableSnapshot(
-				'Set GEMINI_API_KEY to enable AI health snapshots.',
-				model,
-			);
-		}
+		const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+		const model = process.env.OLLAMA_MODEL || this.defaultModel;
 
 		try {
-			const response = await fetch(
-				`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-				{
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						contents: [
-							{
-								role: 'user',
-								parts: [
-									{
-										text: this.buildPrompt(input.context, input.currentNote),
-									},
-								],
-							},
-						],
-						generationConfig: {
-							temperature: 0.2,
-							responseMimeType: 'application/json',
-						},
-					}),
+			const response = await fetch(`${baseUrl}/api/chat`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
 				},
-			);
+				signal: AbortSignal.timeout(60000),
+				body: JSON.stringify({
+					model,
+					messages: [
+						{
+							role: 'system',
+							content:
+								'You write gentle patient-facing health notes for a healthcare app. Return only valid JSON with a single note field.',
+						},
+						{
+							role: 'user',
+							content: this.buildPrompt(input.context, input.currentNote),
+						},
+					],
+					stream: false,
+					format: 'json',
+					options: {
+						temperature: 0.2,
+					},
+				}),
+			});
 
 			if (!response.ok) {
 				const errorBody = await response.text();
@@ -93,70 +68,36 @@ export class PatientHealthSnapshotService {
 					{
 						status: response.status,
 						body: errorBody,
+						model,
 					},
-					'Gemini health snapshot request failed.',
+					'Ollama health note request failed.',
 				);
 
-				return this.createUnavailableSnapshot(
-					'The AI health snapshot service could not respond right now.',
-					model,
-				);
+				return this.createUnavailableSnapshot();
 			}
 
-			const payload =
-				(await response.json()) as GeminiGenerateContentResponse;
-			const rawText = this.extractResponseText(payload);
-			const parsed = this.parseSnapshot(rawText);
+			const payload = (await response.json()) as OllamaChatResponse;
+			const note = this.extractNote(payload.message?.content);
 
-			if (!parsed) {
+			if (!note) {
 				this.logger.warn(
-					{ rawText },
-					'Gemini returned an unexpected health snapshot payload.',
+					{ payload, model },
+					'Ollama returned an unexpected health note payload.',
 				);
-				return this.createUnavailableSnapshot(
-					'The AI health snapshot service returned an unexpected response.',
-					model,
-				);
+
+				return this.createUnavailableSnapshot();
 			}
 
-			return {
-				status: 'READY',
-				model,
-				urgencyLevel: this.normalizeUrgency(parsed.urgencyLevel),
-				summary: parsed.summary?.trim() || null,
-				advice: this.normalizeList(parsed.advice),
-				watchouts: this.normalizeList(parsed.watchouts),
-				whenToContactDoctor: this.normalizeList(
-					parsed.whenToContactDoctor,
-				),
-				disclaimer:
-					parsed.disclaimer?.trim() ||
-					'This snapshot is supportive guidance only and does not replace your clinician.',
-			};
+			return { note };
 		} catch (error) {
-			this.logger.error(error, 'Gemini health snapshot request crashed.');
-			return this.createUnavailableSnapshot(
-				'The AI health snapshot service is temporarily unavailable.',
-				model,
-			);
+			this.logger.error(error, 'Ollama health note request crashed.');
+			return this.createUnavailableSnapshot();
 		}
 	}
 
-	createUnavailableSnapshot(
-		reason: string,
-		model: string | null = process.env.GEMINI_MODEL || this.defaultModel,
-	): PatientHealthSnapshot {
+	createUnavailableSnapshot(_reason?: string): PatientHealthSnapshot {
 		return {
-			status: 'UNAVAILABLE',
-			model,
-			urgencyLevel: 'UNKNOWN',
-			summary: null,
-			advice: [],
-			watchouts: [],
-			whenToContactDoctor: [],
-			disclaimer:
-				'This snapshot is unavailable right now and does not replace medical care.',
-			unavailableReason: reason,
+			note: "You're making steady progress by checking in with yourself. Keep following your care plan, and if symptoms feel worse or unusual, contact your clinician.",
 		};
 	}
 
@@ -165,55 +106,40 @@ export class PatientHealthSnapshotService {
 		currentNote: CreatedHealthJournalEntry,
 	) {
 		return `
-You are creating a patient-facing health snapshot for a healthcare app.
+Write a short patient-facing health note for a healthcare app.
 
 Rules:
+- Return strict JSON with exactly one field: "note".
+- The note must be one short paragraph with 1 to 3 sentences.
+- No bullets, headings, markdown, or extra commentary.
+- Keep the tone warm, calm, practical, and encouraging.
 - Use only the medical data provided below.
-- Do not invent new diagnoses, medications, orders, or test results.
-- Do not tell the patient to start, stop, or change prescription medications on their own.
-- Keep the tone calm, practical, and supportive.
-- If the information suggests elevated concern, say so clearly and recommend contacting the treating clinician.
-- If there are emergency-style warning signs in the provided data, say the patient should seek urgent or emergency care immediately.
-- Return strict JSON with this shape only:
-{
-  "urgencyLevel": "LOW" | "MEDIUM" | "HIGH",
-  "summary": "short paragraph",
-  "advice": ["2 to 5 short bullets"],
-  "watchouts": ["0 to 4 short bullets"],
-  "whenToContactDoctor": ["0 to 4 short bullets"],
-  "disclaimer": "one sentence"
-}
+- Do not invent diagnoses, medications, or test results.
+- Do not tell the patient to start, stop, or change prescription medications.
+- If the information suggests elevated concern, gently recommend contacting the treating clinician.
+- If emergency warning signs are present in the data, say the patient should seek urgent or emergency care immediately.
 
 Patient context:
 ${JSON.stringify(
-		{
-			patientBasicInfo: context.medicalIdentity.basicInfo,
-			allergies: context.medicalIdentity.allergies,
-			chronicConditions: context.medicalIdentity.chronicConditions,
-			activeDiagnoses: context.medicalIdentity.activeDiagnoses,
-			selectedDiagnosis: context.selectedDiagnosis,
-			activeMedications: context.medicalIdentity.currentMedications,
-			activeMedicalOrders: context.activeMedicalOrders,
-			lastFiveEncounters: context.recentEncounters,
-			previousHealthJournalNotes: context.previousHealthNotes,
-			currentHealthJournalNote: currentNote,
-		},
-		null,
-		2,
-	)}
+	{
+		patientBasicInfo: context.medicalIdentity.basicInfo,
+		allergies: context.medicalIdentity.allergies,
+		chronicConditions: context.medicalIdentity.chronicConditions,
+		activeDiagnoses: context.medicalIdentity.activeDiagnoses,
+		selectedDiagnosis: context.selectedDiagnosis,
+		activeMedications: context.medicalIdentity.currentMedications,
+		activeMedicalOrders: context.activeMedicalOrders,
+		lastFiveEncounters: context.recentEncounters,
+		previousHealthJournalNotes: context.previousHealthNotes,
+		currentHealthJournalNote: currentNote,
+	},
+	null,
+	2,
+)}
 		`.trim();
 	}
 
-	private extractResponseText(payload: GeminiGenerateContentResponse) {
-		return (
-			payload.candidates?.[0]?.content?.parts
-				?.map((part) => part.text || '')
-				.join('')
-				.trim() || ''
-		);
-	}
-
-	private parseSnapshot(rawText: string): ParsedHealthSnapshot | null {
+	private extractNote(rawText?: string) {
 		if (!rawText) {
 			return null;
 		}
@@ -225,28 +151,28 @@ ${JSON.stringify(
 			.trim();
 
 		try {
-			return JSON.parse(normalized) as ParsedHealthSnapshot;
-		} catch (error) {
-			this.logger.warn({ rawText, error }, 'Unable to parse Gemini JSON.');
+			const parsed = JSON.parse(normalized) as ParsedHealthSnapshotNote;
+			if (typeof parsed.note === 'string') {
+				return this.normalizeNote(parsed.note);
+			}
+		} catch {
+			// Fallback to the raw text below.
+		}
+
+		return this.normalizeNote(normalized);
+	}
+
+	private normalizeNote(note: string) {
+		const flattened = note.replace(/\s+/g, ' ').trim();
+
+		if (!flattened) {
 			return null;
 		}
-	}
 
-	private normalizeUrgency(value?: string): HealthSnapshotUrgency {
-		if (value === 'LOW' || value === 'MEDIUM' || value === 'HIGH') {
-			return value;
+		if (flattened.length <= 320) {
+			return flattened;
 		}
 
-		return 'UNKNOWN';
-	}
-
-	private normalizeList(value: unknown) {
-		if (!Array.isArray(value)) {
-			return [];
-		}
-
-		return value
-			.map((item) => (typeof item === 'string' ? item.trim() : ''))
-			.filter((item) => item.length > 0);
+		return `${flattened.slice(0, 317).trimEnd()}...`;
 	}
 }

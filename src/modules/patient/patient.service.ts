@@ -45,12 +45,17 @@ export class PatientService {
 
 			return {
 				basicInfo: {
+					firstName: identity.basicInfo.firstName,
+					middleName: identity.basicInfo.middleName,
+					surname: identity.basicInfo.surname,
+					fullName: identity.basicInfo.fullName,
 					age: identity.basicInfo.age,
 					gender: identity.basicInfo.gender,
 					bloodType: identity.basicInfo.bloodType,
 					weightKg: identity.basicInfo.weightKg,
 					heightCm: identity.basicInfo.heightCm,
 					bmi: identity.basicInfo.bmi,
+					profilePictureUrl: identity.basicInfo.profilePictureUrl,
 				},
 				activeDiagnoses: identity.activeDiagnoses.map((row) => ({
 					diagnosisId: row.diagnosisId,
@@ -65,6 +70,7 @@ export class PatientService {
 					dosageUnit: row.dosageUnit,
 					form: row.form,
 					frequency: row.frequency,
+					instructions: row.instructions,
 					startDate: row.startDate,
 					endDate: row.endDate,
 					prescribedBy: row.prescribedBy,
@@ -105,6 +111,37 @@ export class PatientService {
 		}
 	}
 
+	async getPatientName(patientUserId: string) {
+		try {
+			const patient =
+				await this.patientRepository.getPatientByUserId(patientUserId);
+
+			if (!patient) {
+				throw new NotFoundException('Patient profile not found.');
+			}
+
+			const identity = await this.patientRepository.getMedicalIdentity(
+				patient.id,
+			);
+
+			return {
+				name: {
+					firstName: identity.basicInfo.firstName,
+					middleName: identity.basicInfo.middleName,
+					surname: identity.basicInfo.surname,
+					fullName: identity.basicInfo.fullName,
+				},
+			};
+		} catch (error) {
+			if (error instanceof NotFoundException) {
+				throw error;
+			}
+
+			this.logger.error(error);
+			throw new InternalServerErrorException('Failed to load patient name.');
+		}
+	}
+
 	async listMedicalHistory(patientUserId: string) {
 		try {
 			const patient =
@@ -140,11 +177,10 @@ export class PatientService {
 				throw new NotFoundException('Patient profile not found.');
 			}
 
-			const encounter =
-				await this.patientRepository.getMedicalHistoryEncounter(
-					patient.id,
-					encounterId,
-				);
+			const encounter = await this.patientRepository.getMedicalHistoryEncounter(
+				patient.id,
+				encounterId,
+			);
 
 			if (!encounter) {
 				throw new NotFoundException('Encounter not found.');
@@ -232,9 +268,7 @@ export class PatientService {
 			}
 
 			this.logger.error(error);
-			throw new InternalServerErrorException(
-				'Failed to load today schedule.',
-			);
+			throw new InternalServerErrorException('Failed to load today schedule.');
 		}
 	}
 
@@ -264,7 +298,8 @@ export class PatientService {
 
 			const reminderTime =
 				reminderUpdate.reminder_time ?? reminderUpdate.reminderTime;
-			const customDays = reminderUpdate.custom_days ?? reminderUpdate.customDays;
+			const customDays =
+				reminderUpdate.custom_days ?? reminderUpdate.customDays;
 			const isActive = reminderUpdate.is_active ?? reminderUpdate.isActive;
 			const hasTime = reminderTime !== undefined;
 			const hasCustomDays =

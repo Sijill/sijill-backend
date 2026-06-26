@@ -70,8 +70,8 @@ describe('ClinicalModule (e2e)', () => {
 		process.env.DB_USER = TEST_DB_USER;
 		process.env.DB_PASSWORD = TEST_DB_PASSWORD;
 		process.env.JWT_ACCESS_SECRET = TEST_ACCESS_SECRET;
-		process.env.GEMINI_API_KEY = 'clinical-test-gemini-key';
-		process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+		process.env.OLLAMA_BASE_URL = 'http://localhost:11434';
+		process.env.OLLAMA_MODEL = 'tinyllama';
 		process.env.SMTP_HOST = 'localhost';
 		process.env.SMTP_PORT = '1025';
 		process.env.SMTP_FROM_EMAIL = 'test@sijill.local';
@@ -162,6 +162,10 @@ describe('ClinicalModule (e2e)', () => {
 		expect(response.body.basicInfo).toMatchObject({
 			age: expect.any(Number),
 			gender: 'FEMALE',
+			firstName: 'Sara',
+			middleName: 'Ahmed',
+			surname: 'Jenkins',
+			fullName: 'Sara Ahmed Jenkins',
 			bloodType: null,
 			weightKg: null,
 			heightCm: null,
@@ -196,6 +200,20 @@ describe('ClinicalModule (e2e)', () => {
 				isPrimary: true,
 			}),
 		]);
+	});
+
+	it('returns the patient name for the UI endpoint', async () => {
+		const response = await request(app.getHttpServer())
+			.get('/api/v1/patient/name')
+			.set('Authorization', `Bearer ${patientJwt}`)
+			.expect(200);
+
+		expect(response.body.name).toEqual({
+			firstName: 'Sara',
+			middleName: 'Ahmed',
+			surname: 'Jenkins',
+			fullName: 'Sara Ahmed Jenkins',
+		});
 	});
 
 	it('returns patient medical history summaries and encounter detail', async () => {
@@ -305,33 +323,12 @@ describe('ClinicalModule (e2e)', () => {
 		const fetchMock = jest.fn().mockResolvedValue({
 			ok: true,
 			json: jest.fn().mockResolvedValue({
-				candidates: [
-					{
-						content: {
-							parts: [
-								{
-									text: JSON.stringify({
-										urgencyLevel: 'MEDIUM',
-										summary:
-											'Your note suggests a symptom flare that should be watched closely.',
-										advice: [
-											'Follow the asthma care plan your clinician already gave you.',
-											'Keep activity light today and monitor whether the pain and fatigue settle.',
-										],
-										watchouts: [
-											'Rising pain or breathing discomfort would be a reason to contact your clinician sooner.',
-										],
-										whenToContactDoctor: [
-											'Reach out if symptoms keep getting worse over the next day.',
-										],
-										disclaimer:
-											'This guidance supports but does not replace medical care.',
-									}),
-								},
-							],
-						},
-					},
-				],
+				message: {
+					content: JSON.stringify({
+						note: 'You are doing a thoughtful job keeping track of your symptoms. Keep taking it one step at a time, and if the pain or breathing gets worse, check in with your doctor.',
+					}),
+				},
+				model: 'tinyllama',
 			}),
 		});
 		global.fetch = fetchMock as typeof fetch;
@@ -361,12 +358,9 @@ describe('ClinicalModule (e2e)', () => {
 				icd11Title: 'Asthma',
 			},
 		});
-		expect(response.body.healthSnapshot).toMatchObject({
-			status: 'READY',
-			model: 'gemini-2.5-flash',
-			urgencyLevel: 'MEDIUM',
+		expect(response.body.healthSnapshot).toEqual({
+			note: 'You are doing a thoughtful job keeping track of your symptoms. Keep taking it one step at a time, and if the pain or breathing gets worse, check in with your doctor.',
 		});
-		expect(response.body.healthSnapshot.advice).toHaveLength(2);
 
 		const storedNotes = await db.query(
 			`
@@ -384,18 +378,18 @@ describe('ClinicalModule (e2e)', () => {
 			latest_mood: 'More tired today after walking and a little anxious.',
 		});
 
-		const geminiRequest = fetchMock.mock.calls[0]?.[1];
+		const ollamaRequest = fetchMock.mock.calls[0]?.[1];
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock.mock.calls[0][0]).toContain(
-			'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-		);
-		expect(geminiRequest.headers).toMatchObject({
+		expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:11434/api/chat');
+		expect(ollamaRequest.headers).toMatchObject({
 			'Content-Type': 'application/json',
 		});
 
-		const geminiPayload = JSON.parse(geminiRequest.body as string);
-		const prompt = geminiPayload.contents[0].parts[0].text as string;
+		const ollamaPayload = JSON.parse(ollamaRequest.body as string);
+		const prompt = ollamaPayload.messages[1].content as string;
 
+		expect(ollamaPayload.model).toBe('tinyllama');
+		expect(ollamaPayload.format).toBe('json');
 		expect(prompt).toContain('Penicillin');
 		expect(prompt).toContain('Persistent cough follow-up');
 		expect(prompt).toContain('Slept a little better last night');
