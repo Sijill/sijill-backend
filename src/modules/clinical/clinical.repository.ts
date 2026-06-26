@@ -25,7 +25,10 @@ import {
 	MedicationInputDto,
 } from './dto/create-encounter.dto';
 import type { ClinicalSessionContext } from './types/clinical-session.type';
-import { loadPatientMedicalIdentity } from '@modules/patient/patient-medical-identity.query';
+import {
+	loadPatientMedicalIdentity,
+	loadPatientProfilePicture,
+} from '@modules/patient/patient-medical-identity.query';
 
 @Injectable()
 export class ClinicalRepository {
@@ -1404,6 +1407,10 @@ export class ClinicalRepository {
 			chronicConditions: identity.chronicConditions,
 			emergencyContacts: identity.emergencyContacts,
 		};
+	}
+
+	async getPatientProfilePicture(patientId: string) {
+		return await loadPatientProfilePicture(this.databaseService, patientId);
 	}
 
 	async getPatientVitals(patientId: string) {

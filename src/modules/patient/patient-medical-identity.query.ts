@@ -60,6 +60,12 @@ export interface PatientMedicalIdentitySnapshot {
 	}>;
 }
 
+export interface PatientProfilePictureSnapshot {
+	filePath: string;
+	fileName: string;
+	mimeType: string;
+}
+
 export async function loadPatientMedicalIdentity(
 	databaseService: DatabaseService,
 	patientId: string,
@@ -265,6 +271,41 @@ export async function loadPatientMedicalIdentity(
 			phoneNumber: row.phone_number,
 			isPrimary: row.is_primary,
 		})),
+	};
+}
+
+export async function loadPatientProfilePicture(
+	databaseService: DatabaseService,
+	patientId: string,
+): Promise<PatientProfilePictureSnapshot | null> {
+	const { rows } = await databaseService.query(
+		`
+			SELECT
+				doc.file_path,
+				doc.file_name,
+				doc.mime_type
+			FROM patients p
+			LEFT JOIN LATERAL (
+				SELECT file_path, file_name, mime_type
+				FROM documents
+				WHERE user_id = p.user_id
+					AND file_type = 'PROFILE_PICTURE'
+				ORDER BY uploaded_at DESC NULLS LAST, id DESC
+				LIMIT 1
+			) doc ON TRUE
+			WHERE p.id = $1
+		`,
+		[patientId],
+	);
+
+	if (rows.length === 0 || rows[0].file_path === null) {
+		return null;
+	}
+
+	return {
+		filePath: rows[0].file_path,
+		fileName: rows[0].file_name,
+		mimeType: rows[0].mime_type,
 	};
 }
 

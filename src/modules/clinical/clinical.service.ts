@@ -663,9 +663,19 @@ export class ClinicalService {
 	async getMedicalIdentity(payload: ClinicalSessionTokenPayload) {
 		try {
 			const session = await this.assertValidSession(payload);
-			return await this.clinicalRepository.getMedicalIdentity(
+			const identity = await this.clinicalRepository.getMedicalIdentity(
 				session.patientId,
 			);
+
+			return {
+				...identity,
+				basicInfo: {
+					...identity.basicInfo,
+					profilePictureUrl: identity.basicInfo.profilePictureUrl
+						? `/api/v1/clinical/sessions/${session.sessionId}/profile-picture`
+						: null,
+				},
+			};
 		} catch (error) {
 			this.rethrowKnown(error);
 			this.logger.error(error);
@@ -1060,6 +1070,36 @@ export class ClinicalService {
 				isImage || isPdf
 					? `inline; filename="${document.file_name}"`
 					: `attachment; filename="${document.file_name}"`,
+		});
+
+		return new StreamableFile(createReadStream(fullPath));
+	}
+
+	async getProfilePicture(
+		payload: ClinicalSessionTokenPayload,
+		res: Response,
+	): Promise<StreamableFile> {
+		const session = await this.assertValidSession(payload);
+
+		const profilePicture = await this.clinicalRepository.getPatientProfilePicture(
+			session.patientId,
+		);
+
+		if (!profilePicture) {
+			throw new NotFoundException('No profile picture set.');
+		}
+
+		const fullPath = path.resolve(process.cwd(), profilePicture.filePath);
+
+		try {
+			await stat(fullPath);
+		} catch {
+			throw new NotFoundException('Profile picture file not found on disk.');
+		}
+
+		res.set({
+			'Content-Type': profilePicture.mimeType,
+			'Content-Disposition': `inline; filename="${profilePicture.fileName}"`,
 		});
 
 		return new StreamableFile(createReadStream(fullPath));

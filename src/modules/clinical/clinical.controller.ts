@@ -126,6 +126,16 @@ export class ClinicalController {
 		return await this.clinicalService.getMedicalIdentity(session);
 	}
 
+	@Get('sessions/:sessionId/profile-picture')
+	@UseGuards(ClinicalSessionGuard)
+	async getProfilePicture(
+		@Param('sessionId', ParseUUIDPipe) _sessionId: string,
+		@CurrentClinicalSession() session: ClinicalSessionTokenPayload,
+		@Res({ passthrough: true }) res: Response,
+	): Promise<StreamableFile> {
+		return await this.clinicalService.getProfilePicture(session, res);
+	}
+
 	@Patch('sessions/:sessionId/medical-identity')
 	@UseGuards(ClinicalSessionGuard)
 	@HttpCode(HttpStatus.OK)
