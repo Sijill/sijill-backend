@@ -7,10 +7,16 @@ import {
 } from '@nestjs/common';
 
 import { VerificationQueueResponse } from './interfaces/verification-queue.interface';
+import type {
+	PaginatedUsersResponse,
+	PaginatedSuspendedUsersResponse,
+} from './interfaces/repository-response.interface';
 
 import { PinoLogger } from 'nestjs-pino';
 import { AdminRepository } from './admin.repository';
 import { VerificationQueueQueryDto } from './dto/verification-queue-query.dto';
+import { AllUsersQueryDto } from './dto/all-users-query.dto';
+import { SuspendedUsersQueryDto } from './dto/suspended-users-query.dto';
 import {
 	VerificationDecisionDto,
 	VerificationDecision,
@@ -37,6 +43,146 @@ export class AdminService {
 		} catch (error) {
 			this.logger.error(error);
 			throw new InternalServerErrorException('Error loading dashboard.');
+		}
+	}
+
+	async getUsersMeta() {
+		try {
+			return await this.adminRepository.countUsers();
+		} catch (error) {
+			this.logger.error(error);
+			throw new InternalServerErrorException('Error fetching user metadata.');
+		}
+	}
+
+	async getAllUsers(query: AllUsersQueryDto): Promise<PaginatedUsersResponse> {
+		try {
+			const { page, limit, role, status } = query;
+			const offset = (page - 1) * limit;
+
+			const { rows, total } = await this.adminRepository.listUsers(
+				limit,
+				offset,
+				role || null,
+				status || null,
+			);
+
+			return {
+				data: rows,
+				pagination: {
+					total,
+					page,
+					limit,
+					totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+				},
+			};
+		} catch (error) {
+			this.logger.error(error);
+			throw new InternalServerErrorException('Error fetching users list.');
+		}
+	}
+
+	async suspendUser(
+		userId: string,
+		reason: string,
+	): Promise<{ message: string }> {
+		try {
+			const validation =
+				await this.adminRepository.validateUserForStatusChange(userId);
+
+			if (!validation.exists) {
+				throw new NotFoundException('User not found.');
+			}
+
+			if (validation.isAdmin) {
+				throw new BadRequestException('Cannot suspend admin accounts.');
+			}
+
+			if (validation.isSuspended) {
+				throw new ConflictException('User is already suspended.');
+			}
+
+			await this.adminRepository.suspendUser(userId, reason);
+			this.logger.info(`User ${userId} suspended. Reason: ${reason}`);
+
+			return { message: 'User has been suspended successfully.' };
+		} catch (error) {
+			if (
+				error instanceof NotFoundException ||
+				error instanceof BadRequestException ||
+				error instanceof ConflictException
+			) {
+				throw error;
+			}
+
+			this.logger.error(error);
+			throw new InternalServerErrorException('Error suspending user.');
+		}
+	}
+
+	async getSuspendedUsers(
+		query: SuspendedUsersQueryDto,
+	): Promise<PaginatedSuspendedUsersResponse> {
+		try {
+			const { page, limit } = query;
+			const offset = (page - 1) * limit;
+
+			const { rows, total } = await this.adminRepository.listSuspendedUsers(
+				limit,
+				offset,
+			);
+
+			return {
+				data: rows,
+				pagination: {
+					total,
+					page,
+					limit,
+					totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+				},
+			};
+		} catch (error) {
+			this.logger.error(error);
+			throw new InternalServerErrorException(
+				'Error fetching suspended users list.',
+			);
+		}
+	}
+
+	async reactivateUser(userId: string): Promise<{ message: string }> {
+		try {
+			const validation =
+				await this.adminRepository.validateUserForReactivation(userId);
+
+			if (!validation.exists) {
+				throw new NotFoundException('User not found.');
+			}
+
+			if (validation.isAdmin) {
+				throw new BadRequestException('Cannot reactivate admin accounts.');
+			}
+
+			if (!validation.isSuspended) {
+				throw new ConflictException(
+					'User is not suspended. Only suspended users can be reactivated.',
+				);
+			}
+
+			await this.adminRepository.reactivateUser(userId);
+			this.logger.info(`User ${userId} reactivated.`);
+
+			return { message: 'User has been reactivated successfully.' };
+		} catch (error) {
+			if (
+				error instanceof NotFoundException ||
+				error instanceof BadRequestException ||
+				error instanceof ConflictException
+			) {
+				throw error;
+			}
+
+			this.logger.error(error);
+			throw new InternalServerErrorException('Error reactivating user.');
 		}
 	}
 

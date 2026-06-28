@@ -66,7 +66,9 @@ describe('IcdService', () => {
 	});
 
 	it('throws an internal error when the ICD API cannot be reached', async () => {
-		global.fetch = jest.fn().mockRejectedValue(new Error('network down')) as typeof fetch;
+		global.fetch = jest
+			.fn()
+			.mockRejectedValue(new Error('network down')) as typeof fetch;
 
 		await expect(service.searchDiagnoses('asth')).rejects.toThrow(
 			new InternalServerErrorException('Failed to reach ICD API.'),

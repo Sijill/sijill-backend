@@ -6,4 +6,3 @@ export const CurrentImagingSession = createParamDecorator(
 		return request.imagingSession;
 	},
 );
-

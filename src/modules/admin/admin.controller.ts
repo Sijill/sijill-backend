@@ -23,6 +23,9 @@ import { AdminService } from './admin.service';
 import { CurrentUser } from '@common/decorators/user.decorator';
 import type { CurrentUserType } from '@common/types/current-user.type';
 import { VerificationQueueQueryDto } from './dto/verification-queue-query.dto';
+import { AllUsersQueryDto } from './dto/all-users-query.dto';
+import { SuspendedUsersQueryDto } from './dto/suspended-users-query.dto';
+import { SuspendUserDto } from './dto/suspend-user.dto';
 import { VerificationDecisionDto } from './dto/verification-decision.dto';
 import type { Response } from 'express';
 import { createReadStream } from 'fs';
@@ -38,6 +41,36 @@ export class AdminController {
 	@Get('stats')
 	async getStats() {
 		return await this.adminService.getStats();
+	}
+
+	@Get('users/meta')
+	async getUsersMeta() {
+		return await this.adminService.getUsersMeta();
+	}
+
+	@Get('users')
+	async getAllUsers(@Query() query: AllUsersQueryDto) {
+		return await this.adminService.getAllUsers(query);
+	}
+
+	@Get('users/suspended')
+	async getSuspendedUsers(@Query() query: SuspendedUsersQueryDto) {
+		return await this.adminService.getSuspendedUsers(query);
+	}
+
+	@Post('users/:userId/suspend')
+	@HttpCode(HttpStatus.OK)
+	async suspendUser(
+		@Param('userId', ParseUUIDPipe) userId: string,
+		@Body() dto: SuspendUserDto,
+	) {
+		return await this.adminService.suspendUser(userId, dto.reason);
+	}
+
+	@Post('users/:userId/reactivate')
+	@HttpCode(HttpStatus.OK)
+	async reactivateUser(@Param('userId', ParseUUIDPipe) userId: string) {
+		return await this.adminService.reactivateUser(userId);
 	}
 
 	@Get('activities')

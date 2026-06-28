@@ -41,9 +41,7 @@ export class PatientAIService {
 		} catch (error) {
 			this.rethrowKnown(error);
 			this.logger.error(error);
-			throw new InternalServerErrorException(
-				'Failed to create chat session.',
-			);
+			throw new InternalServerErrorException('Failed to create chat session.');
 		}
 	}
 
@@ -61,9 +59,7 @@ export class PatientAIService {
 		} catch (error) {
 			this.rethrowKnown(error);
 			this.logger.error(error);
-			throw new InternalServerErrorException(
-				'Failed to list chat sessions.',
-			);
+			throw new InternalServerErrorException('Failed to list chat sessions.');
 		}
 	}
 
@@ -126,9 +122,7 @@ export class PatientAIService {
 		} catch (error) {
 			this.rethrowKnown(error);
 			this.logger.error(error);
-			throw new InternalServerErrorException(
-				'Failed to update chat session.',
-			);
+			throw new InternalServerErrorException('Failed to update chat session.');
 		}
 	}
 
@@ -154,9 +148,7 @@ export class PatientAIService {
 		} catch (error) {
 			this.rethrowKnown(error);
 			this.logger.error(error);
-			throw new InternalServerErrorException(
-				'Failed to archive chat session.',
-			);
+			throw new InternalServerErrorException('Failed to archive chat session.');
 		}
 	}
 
@@ -168,8 +160,7 @@ export class PatientAIService {
 				throw new NotFoundException('Patient profile not found.');
 			}
 
-			const deletedCount =
-				await this.repository.deleteAllSessions(patientId);
+			const deletedCount = await this.repository.deleteAllSessions(patientId);
 
 			return {
 				message: `${deletedCount} session(s) deleted.`,
@@ -178,17 +169,11 @@ export class PatientAIService {
 		} catch (error) {
 			this.rethrowKnown(error);
 			this.logger.error(error);
-			throw new InternalServerErrorException(
-				'Failed to delete chat sessions.',
-			);
+			throw new InternalServerErrorException('Failed to delete chat sessions.');
 		}
 	}
 
-	async sendMessage(
-		patientUserId: string,
-		sessionId: string,
-		content: string,
-	) {
+	async sendMessage(patientUserId: string, sessionId: string, content: string) {
 		try {
 			const patientId =
 				await this.repository.getPatientIdByUserId(patientUserId);
@@ -227,7 +212,9 @@ export class PatientAIService {
 
 			this.logger.error(error);
 			const message =
-				error instanceof Error ? error.message : 'An unexpected error occurred.';
+				error instanceof Error
+					? error.message
+					: 'An unexpected error occurred.';
 			throw new InternalServerErrorException(message);
 		}
 	}

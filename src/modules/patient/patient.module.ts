@@ -6,10 +6,6 @@ import { PatientHealthSnapshotService } from './patient-health-snapshot.service'
 
 @Module({
 	controllers: [PatientController],
-	providers: [
-		PatientService,
-		PatientRepository,
-		PatientHealthSnapshotService,
-	],
+	providers: [PatientService, PatientRepository, PatientHealthSnapshotService],
 })
 export class PatientModule {}

@@ -4,6 +4,9 @@ import {
 	UsersCountByRole,
 	VerificationsCountByAdmin,
 	VerificationDecisionResult,
+	UsersMeta,
+	UserListItem,
+	SuspendedUserListItem,
 } from './interfaces/repository-response.interface';
 import { DatabaseOperationException } from './exceptions/exceptions';
 import { PinoLogger } from 'nestjs-pino';
@@ -501,6 +504,259 @@ export class AdminRepository {
 			};
 		} catch (error) {
 			this.logger.error('Error validating user for decision:', error);
+			throw new DatabaseOperationException('Failed to validate user');
+		}
+	}
+
+	async countUsers(): Promise<UsersMeta> {
+		try {
+			const query = `
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE account_status = 'SUSPENDED') AS suspended
+                FROM users
+                WHERE role != 'ADMIN'
+            `;
+
+			const { rows } = await this.databaseService.query(query);
+
+			return {
+				totalUsers: Number(rows[0].total),
+				suspendedUsers: Number(rows[0].suspended),
+			};
+		} catch (error) {
+			this.logger.error(error);
+			throw new DatabaseOperationException('Unable to fetch user counts.');
+		}
+	}
+
+	async listUsers(
+		limit: number,
+		offset: number,
+		role: string | null,
+		status: string | null,
+	): Promise<{ rows: UserListItem[]; total: number }> {
+		try {
+			const conditions: string[] = ["u.role != 'ADMIN'"];
+			const baseParams: any[] = [];
+
+			if (role) {
+				conditions.push(`u.role = $${baseParams.length + 1}`);
+				baseParams.push(role);
+			}
+
+			if (status) {
+				conditions.push(`u.account_status = $${baseParams.length + 1}`);
+				baseParams.push(status);
+			}
+
+			const whereClause = conditions.join(' AND ');
+
+			const countQuery = `SELECT COUNT(*) FROM users u WHERE ${whereClause}`;
+			const { rows: countRows } = await this.databaseService.query(
+				countQuery,
+				baseParams,
+			);
+
+			const dataParams = [...baseParams, limit, offset];
+			const dataQuery = `
+                SELECT 
+                    u.id,
+                    u.email,
+                    u.role,
+                    u.account_status AS status,
+                    u.created_at AS joined_at,
+                    u.updated_at AS last_active,
+                    CASE 
+                        WHEN u.role = 'PATIENT' THEN CONCAT(p.first_name, ' ', p.surname)
+                        WHEN u.role = 'HEALTHCARE_PROVIDER' THEN CONCAT(hp.first_name, ' ', hp.surname)
+                        WHEN u.role = 'LAB' THEN l.lab_name
+                        WHEN u.role = 'IMAGING_CENTER' THEN ic.center_name
+                    END AS name
+                FROM users u
+                LEFT JOIN patients p ON p.user_id = u.id
+                LEFT JOIN healthcare_providers hp ON hp.user_id = u.id
+                LEFT JOIN laboratories l ON l.user_id = u.id
+                LEFT JOIN imaging_centers ic ON ic.user_id = u.id
+                WHERE ${whereClause}
+                ORDER BY u.created_at DESC
+                LIMIT $${baseParams.length + 1}
+                OFFSET $${baseParams.length + 2}
+            `;
+
+			const { rows } = await this.databaseService.query(dataQuery, dataParams);
+
+			return {
+				rows,
+				total: Number(countRows[0].count),
+			};
+		} catch (error) {
+			this.logger.error(error);
+			throw new DatabaseOperationException('Unable to fetch users list.');
+		}
+	}
+
+	async validateUserForStatusChange(userId: string): Promise<{
+		exists: boolean;
+		isAdmin: boolean;
+		isSuspended: boolean;
+	}> {
+		try {
+			const query = `
+                SELECT 
+                    id,
+                    role,
+                    account_status
+                FROM users
+                WHERE id = $1
+            `;
+
+			const { rows } = await this.databaseService.query(query, [userId]);
+
+			if (rows.length === 0) {
+				return { exists: false, isAdmin: false, isSuspended: false };
+			}
+
+			const user = rows[0];
+			return {
+				exists: true,
+				isAdmin: user.role === 'ADMIN',
+				isSuspended: user.account_status === 'SUSPENDED',
+			};
+		} catch (error) {
+			this.logger.error('Error validating user for status change:', error);
+			throw new DatabaseOperationException('Failed to validate user');
+		}
+	}
+
+	async suspendUser(userId: string, reason: string): Promise<void> {
+		try {
+			const query = `
+                UPDATE users
+                SET 
+                    account_status = 'SUSPENDED',
+                    suspended_at = now(),
+                    suspention_reason = $2,
+                    updated_at = now()
+                WHERE id = $1
+            `;
+
+			const result = await this.databaseService.query(query, [userId, reason]);
+
+			if (result.rowCount === 0) {
+				throw new DatabaseOperationException('User not found.');
+			}
+		} catch (error) {
+			this.logger.error('Error suspending user:', error);
+			throw new DatabaseOperationException('Failed to suspend user.');
+		}
+	}
+
+	async reactivateUser(userId: string): Promise<void> {
+		try {
+			const query = `
+                UPDATE users
+                SET account_status = 'VERIFIED', updated_at = now()
+                WHERE id = $1
+            `;
+
+			const result = await this.databaseService.query(query, [userId]);
+
+			if (result.rowCount === 0) {
+				throw new DatabaseOperationException('User not found.');
+			}
+		} catch (error) {
+			this.logger.error('Error reactivating user:', error);
+			throw new DatabaseOperationException('Failed to reactivate user.');
+		}
+	}
+
+	async listSuspendedUsers(
+		limit: number,
+		offset: number,
+	): Promise<{ rows: SuspendedUserListItem[]; total: number }> {
+		try {
+			const conditions: string[] = [
+				"u.role != 'ADMIN'",
+				"u.account_status = 'SUSPENDED'",
+			];
+			const whereClause = conditions.join(' AND ');
+
+			const countQuery = `SELECT COUNT(*) FROM users u WHERE ${whereClause}`;
+			const { rows: countRows } = await this.databaseService.query(countQuery);
+
+			const dataQuery = `
+                SELECT 
+                    u.id,
+                    u.email,
+                    u.role,
+                    u.account_status AS status,
+                    u.created_at AS joined_at,
+                    u.suspended_at,
+                    u.suspention_reason,
+                    CASE 
+                        WHEN u.role = 'PATIENT' THEN CONCAT(p.first_name, ' ', p.surname)
+                        WHEN u.role = 'HEALTHCARE_PROVIDER' THEN CONCAT(hp.first_name, ' ', hp.surname)
+                        WHEN u.role = 'LAB' THEN l.lab_name
+                        WHEN u.role = 'IMAGING_CENTER' THEN ic.center_name
+                    END AS name
+                FROM users u
+                LEFT JOIN patients p ON p.user_id = u.id
+                LEFT JOIN healthcare_providers hp ON hp.user_id = u.id
+                LEFT JOIN laboratories l ON l.user_id = u.id
+                LEFT JOIN imaging_centers ic ON ic.user_id = u.id
+                WHERE ${whereClause}
+                ORDER BY u.suspended_at DESC
+                LIMIT $1
+                OFFSET $2
+            `;
+
+			const { rows } = await this.databaseService.query(dataQuery, [
+				limit,
+				offset,
+			]);
+
+			return {
+				rows,
+				total: Number(countRows[0].count),
+			};
+		} catch (error) {
+			this.logger.error(error);
+			throw new DatabaseOperationException(
+				'Unable to fetch suspended users list.',
+			);
+		}
+	}
+
+	async validateUserForReactivation(userId: string): Promise<{
+		exists: boolean;
+		isAdmin: boolean;
+		isSuspended: boolean;
+	}> {
+		try {
+			const query = `
+                SELECT 
+                    id,
+                    role,
+                    account_status
+                FROM users
+                WHERE id = $1
+            `;
+
+			const { rows } = await this.databaseService.query(query, [userId]);
+
+			if (rows.length === 0) {
+				return { exists: false, isAdmin: false, isSuspended: false };
+			}
+
+			const user = rows[0];
+			return {
+				exists: true,
+				isAdmin: user.role === 'ADMIN',
+				isSuspended: user.account_status === 'SUSPENDED',
+			};
+		} catch (error) {
+			this.logger.error('Error validating user for reactivation:', error);
 			throw new DatabaseOperationException('Failed to validate user');
 		}
 	}

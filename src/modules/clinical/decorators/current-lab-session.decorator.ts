@@ -6,4 +6,3 @@ export const CurrentLabSession = createParamDecorator(
 		return request.labSession;
 	},
 );
-

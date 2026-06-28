@@ -9,4 +9,3 @@ export class UploadImagingResultDto {
 	@MaxLength(20000)
 	findings!: string;
 }
-

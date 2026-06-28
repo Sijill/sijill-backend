@@ -9,7 +9,12 @@ import {
 import { PinoLogger } from 'nestjs-pino';
 import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
-import { AccessStatus, AccessType, OrderStatus, UserRole } from '@common/enums/db.enum';
+import {
+	AccessStatus,
+	AccessType,
+	OrderStatus,
+	UserRole,
+} from '@common/enums/db.enum';
 import { generateOtp } from '@helpers/crypto.helper';
 import { ClinicalRepository } from './clinical.repository';
 import { GenerateTokenDto, ClinicalEntityType } from './dto/generate-token.dto';
@@ -179,7 +184,10 @@ export class ClinicalService {
 		}
 	}
 
-	async generateLabOrderPermissionToken(patientUserId: string, orderId: string) {
+	async generateLabOrderPermissionToken(
+		patientUserId: string,
+		orderId: string,
+	) {
 		return await this.generateDiagnosticOrderPermissionToken(
 			patientUserId,
 			orderId,
@@ -255,7 +263,9 @@ export class ClinicalService {
 						);
 
 			if (!order) {
-				throw new NotFoundException('Medical order not found for this patient.');
+				throw new NotFoundException(
+					'Medical order not found for this patient.',
+				);
 			}
 
 			if (
@@ -404,7 +414,8 @@ export class ClinicalService {
 
 	async startLabSession(labUserId: string, dto: StartSessionDto) {
 		try {
-			const lab = await this.clinicalRepository.getLaboratoryByUserId(labUserId);
+			const lab =
+				await this.clinicalRepository.getLaboratoryByUserId(labUserId);
 			if (!lab) {
 				throw new NotFoundException('Laboratory profile not found.');
 			}
@@ -585,10 +596,7 @@ export class ClinicalService {
 				throw new BadRequestException('resultData must be valid JSON.');
 			}
 
-			if (
-				typeof parsedResultData !== 'object' ||
-				parsedResultData === null
-			) {
+			if (typeof parsedResultData !== 'object' || parsedResultData === null) {
 				throw new BadRequestException(
 					'resultData must be a JSON object or array.',
 				);
@@ -614,9 +622,7 @@ export class ClinicalService {
 		} catch (error) {
 			this.rethrowKnown(error);
 			this.logger.error(error);
-			throw new InternalServerErrorException(
-				'Failed to submit lab results.',
-			);
+			throw new InternalServerErrorException('Failed to submit lab results.');
 		}
 	}
 
@@ -1081,9 +1087,8 @@ export class ClinicalService {
 	): Promise<StreamableFile> {
 		const session = await this.assertValidSession(payload);
 
-		const profilePicture = await this.clinicalRepository.getPatientProfilePicture(
-			session.patientId,
-		);
+		const profilePicture =
+			await this.clinicalRepository.getPatientProfilePicture(session.patientId);
 
 		if (!profilePicture) {
 			throw new NotFoundException('No profile picture set.');

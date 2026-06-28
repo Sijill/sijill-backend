@@ -46,11 +46,7 @@ export class IcdService {
 
 		let lastError: unknown;
 
-		for (
-			let attempt = 1;
-			attempt <= IcdService.MAX_ATTEMPTS;
-			attempt += 1
-		) {
+		for (let attempt = 1; attempt <= IcdService.MAX_ATTEMPTS; attempt += 1) {
 			try {
 				const response = await fetch(url, {
 					headers: {
@@ -85,10 +81,7 @@ export class IcdService {
 			} catch (error) {
 				lastError = error;
 
-				if (
-					attempt < IcdService.MAX_ATTEMPTS &&
-					this.isRetryableError(error)
-				) {
+				if (attempt < IcdService.MAX_ATTEMPTS && this.isRetryableError(error)) {
 					this.logger.warn(
 						{
 							attempt,

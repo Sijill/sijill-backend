@@ -303,7 +303,10 @@ export class ClinicalRepository {
 			}
 
 			const status: OrderStatus = orderResult.rows[0].order_status;
-			if (status === OrderStatus.COMPLETED || status === OrderStatus.CANCELLED) {
+			if (
+				status === OrderStatus.COMPLETED ||
+				status === OrderStatus.CANCELLED
+			) {
 				throw new ForbiddenException('This lab order is no longer active.');
 			}
 
@@ -426,7 +429,10 @@ export class ClinicalRepository {
 			}
 
 			const status: OrderStatus = orderResult.rows[0].order_status;
-			if (status === OrderStatus.COMPLETED || status === OrderStatus.CANCELLED) {
+			if (
+				status === OrderStatus.COMPLETED ||
+				status === OrderStatus.CANCELLED
+			) {
 				throw new ForbiddenException('This imaging order is no longer active.');
 			}
 
@@ -850,9 +856,7 @@ export class ClinicalRepository {
 				token.medical_order_status === OrderStatus.COMPLETED ||
 				token.medical_order_status === OrderStatus.CANCELLED
 			) {
-				throw new ForbiddenException(
-					'This medical order is no longer active.',
-				);
+				throw new ForbiddenException('This medical order is no longer active.');
 			}
 
 			if (
@@ -1017,9 +1021,7 @@ export class ClinicalRepository {
 				token.medical_order_status === OrderStatus.COMPLETED ||
 				token.medical_order_status === OrderStatus.CANCELLED
 			) {
-				throw new ForbiddenException(
-					'This medical order is no longer active.',
-				);
+				throw new ForbiddenException('This medical order is no longer active.');
 			}
 
 			if (
@@ -1195,7 +1197,10 @@ export class ClinicalRepository {
 		};
 	}
 
-	async validateLabSession(sessionId: string, labUserId: string): Promise<{
+	async validateLabSession(
+		sessionId: string,
+		labUserId: string,
+	): Promise<{
 		sessionId: string;
 		permissionTokenId: string;
 		patientId: string;

@@ -28,7 +28,7 @@ components:
 
     AccountStatus:
       type: string
-      enum: [PENDING, VERIFIED, REJECTED]
+      enum: [PENDING, VERIFIED, REJECTED, SUSPENDED, DEACTIVATED]
       description: User account verification status
 
     VerificationDecision:
@@ -361,6 +361,132 @@ components:
         error:
           type: string
           example: "Invalid cursor provided."
+
+    UsersMetaResponse:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+          description: Total number of non-admin users
+          example: 1732
+        suspendedUsers:
+          type: integer
+          description: Total number of suspended non-admin users
+          example: 14
+
+    UserListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+        name:
+          type: string
+          nullable: true
+          example: "John Doe"
+        role:
+          $ref: "#/components/schemas/UserRole"
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+        joined_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        last_active:
+          type: string
+          format: date-time
+          example: "2024-06-20T14:30:00Z"
+
+    OffsetPaginationInfo:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 156
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        totalPages:
+          type: integer
+          example: 8
+
+    AllUsersResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserListItem"
+        pagination:
+          $ref: "#/components/schemas/OffsetPaginationInfo"
+
+    SuspendedUserListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+        name:
+          type: string
+          nullable: true
+          example: "John Doe"
+        role:
+          $ref: "#/components/schemas/UserRole"
+        status:
+          type: string
+          example: "SUSPENDED"
+        joined_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        suspended_at:
+          type: string
+          format: date-time
+          example: "2024-07-01T09:00:00Z"
+        suspension_reason:
+          type: string
+          example: "Violation of platform terms of service - multiple reports of unprofessional conduct."
+
+    SuspendedUsersResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SuspendedUserListItem"
+        pagination:
+          $ref: "#/components/schemas/OffsetPaginationInfo"
+
+    SuspendUserRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          description: Reason for the suspension
+          example: "Violation of platform terms of service - multiple reports of unprofessional conduct."
+
+    ActionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "User has been suspended successfully."
 
   parameters:
     userIdParam:
@@ -966,7 +1092,7 @@ paths:
               example:
                 statusCode: 409
                 message: "User is not in pending status. Decision may have already been made."
-        "500":
+         "500":
           description: Internal server error
           content:
             application/json:
@@ -975,6 +1101,375 @@ paths:
               example:
                 statusCode: 500
                 message: "Failed to process verification decision."
+
+  /admin/users/meta:
+    get:
+      summary: Get users metadata
+      description: Returns total number of users and number of suspended users
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Users metadata retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersMetaResponse"
+              examples:
+                defaultMeta:
+                  summary: Typical system state
+                  value:
+                    totalUsers: 1732
+                    suspendedUsers: 14
+                emptySystem:
+                  summary: Empty system
+                  value:
+                    totalUsers: 0
+                    suspendedUsers: 0
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error fetching user metadata."
+
+  /admin/users:
+    get:
+      summary: Get all users
+      description: Returns a paginated list of all non-admin users with optional role and status filters
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 1
+          description: Page number (1-indexed)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+        - name: role
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserRole"
+          description: Filter by user role
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/AccountStatus"
+          description: Filter by account status
+      responses:
+        "200":
+          description: Users list retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllUsersResponse"
+              examples:
+                firstPage:
+                  summary: First page of users
+                  value:
+                    data:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        email: "john.doe@example.com"
+                        name: "John Doe"
+                        role: "PATIENT"
+                        status: "VERIFIED"
+                        joined_at: "2024-01-15T10:30:00Z"
+                        last_active: "2024-06-20T14:30:00Z"
+                      - id: "223e4567-e89b-12d3-a456-426614174001"
+                        email: "sarah.johnson@example.com"
+                        name: "Sarah Johnson"
+                        role: "HEALTHCARE_PROVIDER"
+                        status: "VERIFIED"
+                        joined_at: "2024-02-10T09:15:00Z"
+                        last_active: "2024-06-19T11:00:00Z"
+                    pagination:
+                      total: 156
+                      page: 1
+                      limit: 2
+                      totalPages: 78
+                filteredByRole:
+                  summary: Filtered by role
+                  value:
+                    data:
+                      - id: "323e4567-e89b-12d3-a456-426614174002"
+                        email: "precision.lab@example.com"
+                        name: "Precision Diagnostics Lab"
+                        role: "LAB"
+                        status: "VERIFIED"
+                        joined_at: "2024-03-05T16:45:00Z"
+                        last_active: "2024-06-18T08:30:00Z"
+                    pagination:
+                      total: 34
+                      page: 1
+                      limit: 1
+                      totalPages: 34
+                emptyResults:
+                  summary: No users match filters
+                  value:
+                    data: []
+                    pagination:
+                      total: 0
+                      page: 1
+                      limit: 20
+                      totalPages: 0
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error fetching users list."
+
+  /admin/users/suspended:
+    get:
+      summary: Get suspended users
+      description: Returns a paginated list of all suspended non-admin users
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 1
+          description: Page number (1-indexed)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+      responses:
+        "200":
+          description: Suspended users list retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuspendedUsersResponse"
+              examples:
+                withResults:
+                  summary: Suspended users found
+                  value:
+                    data:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        email: "john.doe@example.com"
+                        name: "John Doe"
+                        role: "PATIENT"
+                        status: "SUSPENDED"
+                        joined_at: "2024-01-15T10:30:00Z"
+                        suspended_at: "2024-07-01T09:00:00Z"
+                        suspension_reason: "Violation of platform terms of service - multiple reports of unprofessional conduct."
+                      - id: "223e4567-e89b-12d3-a456-426614174001"
+                        email: "city.lab@example.com"
+                        name: "City Clinical Lab"
+                        role: "LAB"
+                        status: "SUSPENDED"
+                        joined_at: "2024-02-20T14:00:00Z"
+                        suspended_at: "2024-07-05T11:30:00Z"
+                        suspension_reason: "Failure to maintain required accreditation documentation."
+                    pagination:
+                      total: 14
+                      page: 1
+                      limit: 2
+                      totalPages: 7
+                emptyResults:
+                  summary: No suspended users
+                  value:
+                    data: []
+                    pagination:
+                      total: 0
+                      page: 1
+                      limit: 20
+                      totalPages: 0
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error fetching suspended users list."
+
+  /admin/users/{userId}/suspend:
+    post:
+      summary: Suspend a user
+      description: Suspends a user account with a required reason
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuspendUserRequest"
+            examples:
+              suspendWithReason:
+                summary: Suspend with reason
+                value:
+                  reason: "Violation of platform terms of service - multiple reports of unprofessional conduct."
+      responses:
+        "200":
+          description: User suspended successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResponse"
+              example:
+                message: "User has been suspended successfully."
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                adminAccount:
+                  value:
+                    statusCode: 400
+                    message: "Cannot suspend admin accounts."
+                missingReason:
+                  value:
+                    statusCode: 400
+                    message: "Suspension reason must be at least 10 characters long."
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 404
+                message: "User not found."
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 409
+                message: "User is already suspended."
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error suspending user."
+
+  /admin/users/{userId}/reactivate:
+    post:
+      summary: Reactivate a user
+      description: Reactivates a suspended user account, setting status back to VERIFIED
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userIdParam"
+      responses:
+        "200":
+          description: User reactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResponse"
+              example:
+                message: "User has been reactivated successfully."
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 400
+                message: "Cannot reactivate admin accounts."
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 404
+                message: "User not found."
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 409
+                message: "User is not suspended. Only suspended users can be reactivated."
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 500
+                message: "Error reactivating user."
 
 tags:
   - name: Admin

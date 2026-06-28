@@ -148,4 +148,3 @@ export class DiagnosticController {
 		return await this.clinicalService.uploadImagingResults(session, dto, files);
 	}
 }
-

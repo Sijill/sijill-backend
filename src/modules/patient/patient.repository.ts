@@ -107,8 +107,7 @@ export interface PatientMedicalHistoryEncounterSummary {
 	} | null;
 }
 
-export interface PatientMedicalHistoryEncounterDetail
-	extends PatientMedicalHistoryEncounterSummary {
+export interface PatientMedicalHistoryEncounterDetail extends PatientMedicalHistoryEncounterSummary {
 	symptomsAndComplaints: Array<{
 		title: string;
 		description: string | null;

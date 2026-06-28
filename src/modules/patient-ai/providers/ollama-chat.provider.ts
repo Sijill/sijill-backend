@@ -1,5 +1,9 @@
 import { PinoLogger } from 'nestjs-pino';
-import type { AiProvider, ChatRequest, ChatResponse } from '../interfaces/ai-provider.interface';
+import type {
+	AiProvider,
+	ChatRequest,
+	ChatResponse,
+} from '../interfaces/ai-provider.interface';
 
 export class OllamaChatProvider implements AiProvider {
 	private readonly logger: PinoLogger;
@@ -33,7 +37,9 @@ export class OllamaChatProvider implements AiProvider {
 				{ status: response.status, body: errorBody },
 				'Ollama chat request failed.',
 			);
-			throw new Error(`Ollama returned status ${response.status}: ${errorBody}`);
+			throw new Error(
+				`Ollama returned status ${response.status}: ${errorBody}`,
+			);
 		}
 
 		const payload = (await response.json()) as {

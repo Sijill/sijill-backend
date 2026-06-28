@@ -77,7 +77,8 @@ export class PatientAIRepository {
 		patientId: string,
 		status?: string,
 	): Promise<ChatSessionRow[]> {
-		const statusFilter = status === 'ACTIVE' || status === 'ARCHIVED' ? status : null;
+		const statusFilter =
+			status === 'ACTIVE' || status === 'ARCHIVED' ? status : null;
 
 		const { rows } = await this.databaseService.query(
 			`SELECT

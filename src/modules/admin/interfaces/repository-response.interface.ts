@@ -23,3 +23,49 @@ export interface VerificationDecisionResult {
 	labName?: string;
 	centerName?: string;
 }
+
+export interface UsersMeta {
+	totalUsers: number;
+	suspendedUsers: number;
+}
+
+export interface UserListItem {
+	id: string;
+	email: string;
+	name: string | null;
+	role: string;
+	status: string;
+	joinedAt: Date;
+	lastActive: Date;
+}
+
+export interface PaginatedUsersResponse {
+	data: UserListItem[];
+	pagination: {
+		total: number;
+		page: number;
+		limit: number;
+		totalPages: number;
+	};
+}
+
+export interface SuspendedUserListItem {
+	id: string;
+	email: string;
+	name: string | null;
+	role: string;
+	status: string;
+	joined_at: Date;
+	suspended_at: Date;
+	suspention_reason: string;
+}
+
+export interface PaginatedSuspendedUsersResponse {
+	data: SuspendedUserListItem[];
+	pagination: {
+		total: number;
+		page: number;
+		limit: number;
+		totalPages: number;
+	};
+}

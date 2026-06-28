@@ -11,4 +11,3 @@ export class UploadLabResultDto {
 	@MaxLength(5000)
 	additionalNotes?: string;
 }
-

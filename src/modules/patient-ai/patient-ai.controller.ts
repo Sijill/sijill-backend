@@ -34,10 +34,7 @@ export class PatientAIController {
 		@CurrentUser() user: CurrentUserType,
 		@Body() dto: CreateSessionDto,
 	) {
-		return await this.patientAIService.createSession(
-			user.userId,
-			dto.title,
-		);
+		return await this.patientAIService.createSession(user.userId, dto.title);
 	}
 
 	@SkipThrottle()

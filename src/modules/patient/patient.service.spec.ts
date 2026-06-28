@@ -42,7 +42,9 @@ describe('PatientService', () => {
 		await expect(
 			service.updateReminder('patient-user-1', 'reminder-1', undefined as any),
 		).rejects.toThrow(
-			new BadRequestException('At least one reminder update field is required.'),
+			new BadRequestException(
+				'At least one reminder update field is required.',
+			),
 		);
 
 		expect(patientRepository.updateReminder).not.toHaveBeenCalled();

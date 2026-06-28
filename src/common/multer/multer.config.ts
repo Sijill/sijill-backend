@@ -5,62 +5,23 @@ import { BadRequestException } from '@nestjs/common';
 import * as path from 'path';
 
 const fieldsMap = new Map();
-fieldsMap.set(
-	'profilePicture',
-	'identity',
-);
-fieldsMap.set(
-	'nationalIdFront',
-	'identity',
-);
-fieldsMap.set(
-	'nationalIdBack',
-	'identity',
-);
-fieldsMap.set(
-	'selfieWithId',
-	'identity',
-);
-fieldsMap.set(
-	'medicalLicenseDocument',
-	'identity',
-);
+fieldsMap.set('profilePicture', 'identity');
+fieldsMap.set('nationalIdFront', 'identity');
+fieldsMap.set('nationalIdBack', 'identity');
+fieldsMap.set('selfieWithId', 'identity');
+fieldsMap.set('medicalLicenseDocument', 'identity');
 
-fieldsMap.set(
-	'workplaceLogo',
-	'workplace',
-);
+fieldsMap.set('workplaceLogo', 'workplace');
 fieldsMap.set('labLogo', 'workplace');
-fieldsMap.set(
-	'centerLogo',
-	'workplace',
-);
-fieldsMap.set(
-	'workplaceDocument',
-	'workplace',
-);
-fieldsMap.set(
-	'accreditationDocument',
-	'workplace',
-);
-fieldsMap.set(
-	'proofOfAddress',
-	'workplace',
-);
+fieldsMap.set('centerLogo', 'workplace');
+fieldsMap.set('workplaceDocument', 'workplace');
+fieldsMap.set('accreditationDocument', 'workplace');
+fieldsMap.set('proofOfAddress', 'workplace');
 
-fieldsMap.set(
-	'prescription',
-	'clinical',
-);
+fieldsMap.set('prescription', 'clinical');
 fieldsMap.set('labResult', 'clinical');
-fieldsMap.set(
-	'imagingResult',
-	'clinical',
-);
-fieldsMap.set(
-	'clinicalAttachment',
-	'clinical',
-);
+fieldsMap.set('imagingResult', 'clinical');
+fieldsMap.set('clinicalAttachment', 'clinical');
 
 const ALLOWED_MIME_TYPES = new Set([
 	'image/jpeg',

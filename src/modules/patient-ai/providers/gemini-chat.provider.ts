@@ -1,5 +1,10 @@
 import { PinoLogger } from 'nestjs-pino';
-import type { AiProvider, ChatRequest, ChatResponse, ChatMessage } from '../interfaces/ai-provider.interface';
+import type {
+	AiProvider,
+	ChatRequest,
+	ChatResponse,
+	ChatMessage,
+} from '../interfaces/ai-provider.interface';
 
 interface GeminiContent {
 	role?: string;
@@ -61,7 +66,9 @@ export class GeminiChatProvider implements AiProvider {
 				{ status: response.status, body: errorBody },
 				'Gemini chat request failed.',
 			);
-			throw new Error(`Gemini returned status ${response.status}: ${errorBody}`);
+			throw new Error(
+				`Gemini returned status ${response.status}: ${errorBody}`,
+			);
 		}
 
 		const payload = (await response.json()) as GeminiResponse;
@@ -90,7 +97,8 @@ export class GeminiChatProvider implements AiProvider {
 
 		for (const msg of messages) {
 			if (msg.role === 'system') {
-				systemMessage = (systemMessage ? systemMessage + '\n' : '') + msg.content;
+				systemMessage =
+					(systemMessage ? systemMessage + '\n' : '') + msg.content;
 			} else {
 				contents.push({
 					role: msg.role === 'assistant' ? 'model' : msg.role,

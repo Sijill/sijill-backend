@@ -25,4 +25,3 @@ export interface ImagingSessionTokenPayload {
 	iat?: number;
 	exp?: number;
 }
-
