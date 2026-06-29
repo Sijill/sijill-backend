@@ -20,7 +20,7 @@ export class OllamaChatProvider implements AiProvider {
 		const response = await fetch(`${baseUrl}/api/chat`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			signal: AbortSignal.timeout(60000),
+			signal: AbortSignal.timeout(120000),
 			body: JSON.stringify({
 				model,
 				messages: request.messages,

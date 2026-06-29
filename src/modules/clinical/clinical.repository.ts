@@ -401,8 +401,8 @@ export class ClinicalRepository {
 		orderId: string;
 		imagingCenterId: string;
 		uploadedByUserId: string;
-		studyDescription: string;
-		findings: string;
+		studyDescription?: string;
+		findings?: string;
 		files: Express.Multer.File[];
 	}) {
 		const client = await this.databaseService.getClient();

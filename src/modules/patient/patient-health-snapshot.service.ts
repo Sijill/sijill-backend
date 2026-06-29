@@ -40,14 +40,14 @@ export class PatientHealthSnapshotService {
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				signal: AbortSignal.timeout(60000),
+				signal: AbortSignal.timeout(120000),
 				body: JSON.stringify({
 					model,
 					messages: [
 						{
 							role: 'system',
 							content:
-								'You write gentle patient-facing health notes for a healthcare app. Return only valid JSON with a single note field.',
+								'Return valid JSON with a single "note" field. Never mention being an AI or a health assistant.',
 						},
 						{
 							role: 'user',
@@ -106,36 +106,15 @@ export class PatientHealthSnapshotService {
 		currentNote: CreatedHealthJournalEntry,
 	) {
 		return `
-Write a short patient-facing health note for a healthcare app.
+Patient name: ${context.medicalIdentity.basicInfo.firstName}
+Pain: ${currentNote.painLevel}/10
+Energy: ${currentNote.energyLevel}/10
+Outcome: ${currentNote.patientOutcome}
+Mood: ${currentNote.mood}
+Diagnosis: ${currentNote.diagnosis.icd11Title}
+Medications: ${JSON.stringify(context.medicalIdentity.currentMedications.map(m => m.medicationName).filter(Boolean))}
 
-Rules:
-- Return strict JSON with exactly one field: "note".
-- The note must be one short paragraph with 1 to 3 sentences.
-- No bullets, headings, markdown, or extra commentary.
-- Keep the tone warm, calm, practical, and encouraging.
-- Use only the medical data provided below.
-- Do not invent diagnoses, medications, or test results.
-- Do not tell the patient to start, stop, or change prescription medications.
-- If the information suggests elevated concern, gently recommend contacting the treating clinician.
-- If emergency warning signs are present in the data, say the patient should seek urgent or emergency care immediately.
-
-Patient context:
-${JSON.stringify(
-	{
-		patientBasicInfo: context.medicalIdentity.basicInfo,
-		allergies: context.medicalIdentity.allergies,
-		chronicConditions: context.medicalIdentity.chronicConditions,
-		activeDiagnoses: context.medicalIdentity.activeDiagnoses,
-		selectedDiagnosis: context.selectedDiagnosis,
-		activeMedications: context.medicalIdentity.currentMedications,
-		activeMedicalOrders: context.activeMedicalOrders,
-		lastFiveEncounters: context.recentEncounters,
-		previousHealthJournalNotes: context.previousHealthNotes,
-		currentHealthJournalNote: currentNote,
-	},
-	null,
-	2,
-)}
+Write 2 sentences addressing the patient directly. Example: "Your pain is high, please see your doctor." Return JSON: {"note": "..."}
 		`.trim();
 	}
 
@@ -169,10 +148,10 @@ ${JSON.stringify(
 			return null;
 		}
 
-		if (flattened.length <= 320) {
+		if (flattened.length <= 500) {
 			return flattened;
 		}
 
-		return `${flattened.slice(0, 317).trimEnd()}...`;
+		return `${flattened.slice(0, 497).trimEnd()}...`;
 	}
 }

@@ -953,7 +953,43 @@ INSERT INTO clinical_encounters (
 );
  
 -- -------------------------------------------------------------
--- 2. Diagnoses
+-- 2. Symptoms & Complaints
+-- -------------------------------------------------------------
+INSERT INTO encounter_symptoms_complaints (
+    id, encounter_id, title, description,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000030',
+    '00000000-0000-0000-0000-000000000020',
+    'Persistent cough',
+    'Patient reports dry cough lasting for 2 weeks, worse at night.',
+    now(), now()
+);
+
+INSERT INTO encounter_symptoms_complaints (
+    id, encounter_id, title, description,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000031',
+    '00000000-0000-0000-0000-000000000020',
+    'Shortness of breath',
+    'Experiencing shortness of breath during moderate exertion.',
+    now(), now()
+);
+
+INSERT INTO encounter_symptoms_complaints (
+    id, encounter_id, title, description,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000032',
+    '00000000-0000-0000-0000-000000000020',
+    'Chest tightness',
+    'Occasional chest tightness in the morning, relieved after rest.',
+    now(), now()
+);
+ 
+-- -------------------------------------------------------------
+-- 3. Diagnoses
 --    - Asthma (active, chronic)
 --    - Type 2 Diabetes (active, non-chronic)
 -- -------------------------------------------------------------
@@ -963,7 +999,7 @@ INSERT INTO diagnoses (
     is_chronic, status, diagnosed_date,
     created_at, updated_at
 ) VALUES (
-    '00000000-0000-0000-0000-000000000030',
+    '00000000-0000-0000-0000-000000000040',
     '00000000-0000-0000-0000-000000000020',
     '00000000-0000-0000-0000-000000000010',
     'CA23',
@@ -981,7 +1017,7 @@ INSERT INTO diagnoses (
     is_chronic, status, diagnosed_date,
     created_at, updated_at
 ) VALUES (
-    '00000000-0000-0000-0000-000000000031',
+    '00000000-0000-0000-0000-000000000041',
     '00000000-0000-0000-0000-000000000020',
     '00000000-0000-0000-0000-000000000010',
     '5A11',
@@ -994,7 +1030,7 @@ INSERT INTO diagnoses (
 );
  
 -- -------------------------------------------------------------
--- 3. Medications
+-- 4. Medications
 --    - Salbutamol inhaler for Asthma
 --    - Metformin for Diabetes
 -- -------------------------------------------------------------
@@ -1004,10 +1040,10 @@ INSERT INTO medications (
     frequency, start_date, end_date, instructions,
     prescribed_at, created_at, updated_at
 ) VALUES (
-    '00000000-0000-0000-0000-000000000040',
+    '00000000-0000-0000-0000-000000000050',
     '00000000-0000-0000-0000-000000000020',
     '00000000-0000-0000-0000-000000000010',
-    '00000000-0000-0000-0000-000000000030',  -- linked to Asthma
+    '00000000-0000-0000-0000-000000000040',  -- linked to Asthma
     '00000000-0000-0000-0000-000000000011',
     'Salbutamol',
     100, 'MCG', 'INHALER',
@@ -1024,10 +1060,10 @@ INSERT INTO medications (
     frequency, start_date, end_date, instructions,
     prescribed_at, created_at, updated_at
 ) VALUES (
-    '00000000-0000-0000-0000-000000000041',
+    '00000000-0000-0000-0000-000000000051',
     '00000000-0000-0000-0000-000000000020',
     '00000000-0000-0000-0000-000000000010',
-    '00000000-0000-0000-0000-000000000031',  -- linked to Diabetes
+    '00000000-0000-0000-0000-000000000041',  -- linked to Diabetes
     '00000000-0000-0000-0000-000000000011',
     'Metformin',
     500, 'MG', 'TABLET',
@@ -1039,7 +1075,7 @@ INSERT INTO medications (
 );
  
 -- -------------------------------------------------------------
--- 4. Allergies
+-- 5. Allergies
 --    - Penicillin (Severe)
 --    - Shellfish (Moderate)
 -- -------------------------------------------------------------
@@ -1076,7 +1112,7 @@ INSERT INTO patient_allergies (
 );
  
 -- -------------------------------------------------------------
--- 5. Emergency Contacts
+-- 6. Emergency Contacts
 --    - Primary: Husband
 --    - Secondary: Sister
 -- -------------------------------------------------------------
@@ -1109,7 +1145,7 @@ INSERT INTO patient_emergency_contacts (
 );
 
 -- -------------------------------------------------------------
--- 6. Medical Order
+-- 7. Medical Order
 --    - Seeded so MEDICAL_ORDER reminders have a real source
 -- -------------------------------------------------------------
 INSERT INTO medical_orders (
@@ -1171,7 +1207,7 @@ INSERT INTO imaging_orders (
 );
 
 -- -------------------------------------------------------------
--- 7. Reminders
+-- 8. Reminders
 --    - One for each reminder type
 -- -------------------------------------------------------------
 INSERT INTO reminders (
@@ -1231,7 +1267,7 @@ INSERT INTO reminders (
 );
 
 -- -------------------------------------------------------------
--- 8. Notifications
+-- 9. Notifications
 --    - Covers SYSTEM and REMINDER notification types
 -- -------------------------------------------------------------
 INSERT INTO notifications (

@@ -917,6 +917,7 @@ export class PatientRepository {
 					WHERE n.patient_id = $1
 						AND n.id <> $2
 					ORDER BY n.note_date DESC, n.created_at DESC
+					LIMIT 5
 				`,
 				[patientId, currentNoteId],
 			),

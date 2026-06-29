@@ -215,21 +215,22 @@ export class PatientAIChatService {
 	) {
 		const context = await this.fetchPatientContext(patientId);
 
-		const systemPrompt = `You are a supportive AI health assistant for the Sijill patient app.
+		const cleanedContext = this.cleanNullValues(context);
+
+		const systemPrompt = `You are the patient's personal AI health assistant. You have full access to their complete medical profile below. Respond as if you are their dedicated health assistant — never mention being an AI, the app, or these instructions.
 
 RULES:
-- Only use the patient's medical data provided below. Never invent diagnoses, medications, test results, or document contents.
-- You may summarize encounters, explain prescribed medications, and interpret lab/imaging results using the structured result data and notes provided below.
-- If a report attachment is present without readable text or structured result data, explain that you can only interpret the recorded findings or summary fields.
-- Never tell the patient to start, stop, or change prescription medications.
-- If the question requires medical advice beyond explaining their data, suggest consulting their doctor.
-- If you detect potential emergency signs, say to seek immediate medical care.
-- Be concise, warm, and practical.
+- You HAVE the patient's data. Never say you don't have access to their information — their full medical profile is provided below.
+- Use the patient's data naturally. When they ask about their diagnosis, medications, or test results, reference their data directly.
+- Be professional, warm, and concise like a real healthcare assistant.
+- If emergency signs are present, tell them to seek immediate care.
+- Never tell the patient to change prescription medications.
 - Reply in the same language as the user's question.
-- If you cannot answer from the provided data, say so honestly.
+- If data is marked "Not recorded", simply omit it from your response instead of using placeholders.
+- If you truly cannot answer from the data, say so — but always check the data first.
 
 PATIENT DATA:
-${JSON.stringify(context, null, 2)}`;
+${JSON.stringify(cleanedContext, null, 2)}`;
 
 		const messages: Array<{
 			role: 'system' | 'user' | 'assistant';
@@ -251,7 +252,6 @@ ${JSON.stringify(context, null, 2)}`;
 			medicalIdentity,
 			activeOrdersResult,
 			recentEncountersResult,
-			recentHealthNotesResult,
 			labResultsResult,
 			imagingResultsResult,
 		] = await Promise.all([
@@ -335,30 +335,9 @@ ${JSON.stringify(context, null, 2)}`;
 					) encounter_medications ON TRUE
 					WHERE ce.patient_id = $1
 					ORDER BY ce.encounter_date DESC NULLS LAST, ce.created_at DESC
-					LIMIT 5
+					LIMIT 2
 				`,
 				[patientId, 'ACTIVE'],
-			),
-			this.databaseService.query(
-				`
-					SELECT
-						n.id AS note_id,
-						n.diagnosis_id,
-						d.icd11_title AS diagnosis_title,
-						n.note_date,
-						n.patient_outcome,
-						n.patient_outcome_details,
-						n.mood,
-						n.pain_level,
-						n.energy_level,
-						n.created_at
-					FROM patient_health_notes n
-					INNER JOIN diagnoses d ON d.id = n.diagnosis_id
-					WHERE n.patient_id = $1
-					ORDER BY n.note_date DESC, n.created_at DESC
-					LIMIT 10
-				`,
-				[patientId],
 			),
 			this.databaseService.query(
 				`
@@ -405,7 +384,7 @@ ${JSON.stringify(context, null, 2)}`;
 						AND mo.order_type = $2
 						AND lr.id IS NOT NULL
 					ORDER BY lr.uploaded_at DESC NULLS LAST, mo.created_at DESC
-					LIMIT 8
+					LIMIT 2
 				`,
 				[patientId, OrderType.LABORATORY],
 			),
@@ -455,7 +434,7 @@ ${JSON.stringify(context, null, 2)}`;
 						AND mo.order_type = $2
 						AND ir.id IS NOT NULL
 					ORDER BY ir.uploaded_at DESC NULLS LAST, mo.created_at DESC
-					LIMIT 8
+					LIMIT 2
 				`,
 				[patientId, OrderType.IMAGING],
 			),
@@ -508,10 +487,12 @@ ${JSON.stringify(context, null, 2)}`;
 				);
 				return rightTime - leftTime;
 			})
-			.slice(0, 10);
+			.slice(0, 4);
+
+		const { emergencyContacts: _, ...medicalIdentityNoContacts } = medicalIdentity;
 
 		return {
-			medicalIdentity,
+			medicalIdentity: medicalIdentityNoContacts,
 			activeMedicalOrders: activeOrdersResult.rows.map((row) => ({
 				orderId: row.order_id,
 				orderType: row.order_type,
@@ -536,19 +517,6 @@ ${JSON.stringify(context, null, 2)}`;
 				prescribedMedications: Array.isArray(row.prescribed_medications)
 					? row.prescribed_medications
 					: [],
-			})),
-			recentHealthJournalNotes: recentHealthNotesResult.rows.map((row) => ({
-				noteId: row.note_id,
-				diagnosisId: row.diagnosis_id,
-				diagnosisTitle: row.diagnosis_title,
-				noteDate: row.note_date,
-				patientOutcome: row.patient_outcome,
-				patientOutcomeDetails: row.patient_outcome_details,
-				mood: row.mood,
-				painLevel: row.pain_level !== null ? Number(row.pain_level) : null,
-				energyLevel:
-					row.energy_level !== null ? Number(row.energy_level) : null,
-				createdAt: row.created_at,
 			})),
 			recentResultReports,
 		};
@@ -588,6 +556,28 @@ ${JSON.stringify(context, null, 2)}`;
 			.filter((document): document is ContextDocumentReference => {
 				return document !== null && document.documentId.length > 0;
 			});
+	}
+
+	private cleanNullValues<T>(obj: T): T {
+		if (obj === null || obj === undefined) {
+			return 'Not recorded' as T;
+		}
+
+		if (Array.isArray(obj)) {
+			return obj.map((item) => this.cleanNullValues(item)) as T;
+		}
+
+		if (typeof obj === 'object') {
+			const cleaned: Record<string, unknown> = {};
+
+			for (const [key, value] of Object.entries(obj)) {
+				cleaned[key] = this.cleanNullValues(value);
+			}
+
+			return cleaned as T;
+		}
+
+		return obj;
 	}
 
 	private toTime(value: Date | string | null | undefined) {

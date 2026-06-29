@@ -1008,7 +1008,16 @@ export class ClinicalService {
 	}
 
 	private validateEncounterPayload(dto: CreateEncounterDto) {
+		const todayStart = new Date();
+		todayStart.setHours(0, 0, 0, 0);
+
 		for (const medication of dto.medications ?? []) {
+			if (new Date(medication.startDate) < todayStart) {
+				throw new BadRequestException(
+					'Medication startDate cannot be earlier than today.',
+				);
+			}
+
 			if (
 				medication.endDate &&
 				new Date(medication.endDate) < new Date(medication.startDate)
