@@ -823,9 +823,9 @@ INSERT INTO patients (
 ) VALUES (
     '00000000-0000-0000-0000-000000000010',
     '00000000-0000-0000-0000-000000000002',
-    'Sara', 'Ahmed', 'Jenkins',
-    'FEMALE', '1992-03-15', '29203150123456',
-    'O+', 65, 168,
+    'Mostafa', 'Mahmoud', 'Khedr',
+    'MALE', '2004-09-29', '30409291701833',
+    'O+', 90, 185,
     now(), now()
 );
 
@@ -933,9 +933,12 @@ INSERT INTO imaging_centers (
     now(), now()
 );
 
+
 -- -------------------------------------------------------------
--- 1. Clinical Encounter (links patient to HCP, needed for FKs)
+-- 1. Clinical Encounters
 -- -------------------------------------------------------------
+ 
+-- Encounter 1: November 2025 — first visit, asthma diagnosis
 INSERT INTO clinical_encounters (
     id, patient_id, hcp_id,
     encounter_date, location_address,
@@ -943,68 +946,100 @@ INSERT INTO clinical_encounters (
     created_at, updated_at
 ) VALUES (
     '00000000-0000-0000-0000-000000000020',
-    '00000000-0000-0000-0000-000000000010',  -- Sara
+    '00000000-0000-0000-0000-000000000010',  -- Mostafa
     '00000000-0000-0000-0000-000000000011',  -- Dr. Khaled
     '2025-11-10 09:00:00+00',
     'Cairo Medical Center, 12 Tahrir St, Cairo',
-    '2026-06-15 09:00:00+00',
-    'Routine follow-up for asthma and diabetes management.',
+    '2026-03-20 09:00:00+00',
+    'Follow-up in 4 months to reassess asthma control and review CBC results.',
+    now(), now()
+);
+ 
+-- Encounter 2: March 2026 — follow-up visit, pneumonia diagnosis
+INSERT INTO clinical_encounters (
+    id, patient_id, hcp_id,
+    encounter_date, location_address,
+    next_appointment_date, appointment_notes,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000010',  -- Mostafa
+    '00000000-0000-0000-0000-000000000011',  -- Dr. Khaled
+    '2026-03-20 09:00:00+00',
+    'Cairo Medical Center, 12 Tahrir St, Cairo',
+    NULL,
+    'Return if symptoms worsen or do not resolve within 7 days. Review chest X-ray once results are available.',
     now(), now()
 );
  
 -- -------------------------------------------------------------
 -- 2. Symptoms & Complaints
 -- -------------------------------------------------------------
+ 
+-- Encounter 1 symptoms
 INSERT INTO encounter_symptoms_complaints (
     id, encounter_id, title, description,
     created_at, updated_at
 ) VALUES (
     '00000000-0000-0000-0000-000000000030',
     '00000000-0000-0000-0000-000000000020',
-    'Persistent cough',
-    'Patient reports dry cough lasting for 2 weeks, worse at night.',
+    'Persistent dry cough',
+    'Patient reports a dry cough lasting approximately 3 weeks, worse at night and in the early morning.',
     now(), now()
 );
-
+ 
 INSERT INTO encounter_symptoms_complaints (
     id, encounter_id, title, description,
     created_at, updated_at
 ) VALUES (
     '00000000-0000-0000-0000-000000000031',
     '00000000-0000-0000-0000-000000000020',
-    'Shortness of breath',
-    'Experiencing shortness of breath during moderate exertion.',
+    'Shortness of breath on exertion',
+    'Patient experiences breathlessness when climbing stairs or walking briskly. Resolves with rest within a few minutes.',
     now(), now()
 );
-
+ 
+-- Encounter 2 symptoms
 INSERT INTO encounter_symptoms_complaints (
     id, encounter_id, title, description,
     created_at, updated_at
 ) VALUES (
     '00000000-0000-0000-0000-000000000032',
-    '00000000-0000-0000-0000-000000000020',
-    'Chest tightness',
-    'Occasional chest tightness in the morning, relieved after rest.',
+    '00000000-0000-0000-0000-000000000021',
+    'Productive cough with yellow sputum',
+    'Patient reports a new productive cough over the past 4 days with yellowish sputum. Different character from her usual asthma cough.',
+    now(), now()
+);
+ 
+INSERT INTO encounter_symptoms_complaints (
+    id, encounter_id, title, description,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000033',
+    '00000000-0000-0000-0000-000000000021',
+    'Fever and chills',
+    'Patient reports fever reaching 38.6°C and intermittent chills for the past 3 days. No rigors.',
     now(), now()
 );
  
 -- -------------------------------------------------------------
 -- 3. Diagnoses
---    - Asthma (active, chronic)
---    - Type 2 Diabetes (active, non-chronic)
+--    - Encounter 1: Asthma (chronic, active)
+--    - Encounter 2: Community-acquired pneumonia (not chronic, active)
 -- -------------------------------------------------------------
+ 
 INSERT INTO diagnoses (
     id, encounter_id, patient_id,
     icd11_code, icd11_title, clinical_description,
     is_chronic, status, diagnosed_date,
     created_at, updated_at
 ) VALUES (
-    '00000000-0000-0000-0000-000000000033',
+    '00000000-0000-0000-0000-000000000034',
     '00000000-0000-0000-0000-000000000020',
     '00000000-0000-0000-0000-000000000010',
     'CA23',
     'Asthma',
-    'Mild persistent asthma. Patient reports occasional nocturnal symptoms and exercise-induced wheezing. Well-controlled on current inhaler regimen.',
+    'Mild persistent asthma. Patient presents with nocturnal dry cough and exertional dyspnea. Spirometry consistent with obstructive pattern. Initiated on a short-acting bronchodilator and an inhaled corticosteroid.',
     TRUE,
     'ACTIVE',
     '2025-11-10 09:00:00+00',
@@ -1017,23 +1052,24 @@ INSERT INTO diagnoses (
     is_chronic, status, diagnosed_date,
     created_at, updated_at
 ) VALUES (
-    '00000000-0000-0000-0000-000000000034',
-    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000035',
+    '00000000-0000-0000-0000-000000000021',
     '00000000-0000-0000-0000-000000000010',
-    '5A11',
-    'Type 2 diabetes mellitus',
-    'Newly diagnosed Type 2 diabetes. HbA1c at 7.8%. Patient started on Metformin. Lifestyle modifications advised.',
+    'CA40',
+    'Pneumonia',
+    'Community-acquired pneumonia. Patient presents with 4 days of productive cough and fever. Chest auscultation reveals reduced air entry in the right lower lobe. Treated with dual antibiotic therapy. Chest X-ray ordered to confirm extent.',
     FALSE,
     'ACTIVE',
-    '2025-11-10 09:00:00+00',
+    '2026-03-20 09:00:00+00',
     now(), now()
 );
  
 -- -------------------------------------------------------------
 -- 4. Medications
---    - Salbutamol inhaler for Asthma
---    - Metformin for Diabetes
+--    - Encounter 1 (Asthma): Salbutamol inhaler, Fluticasone inhaler
+--    - Encounter 2 (Pneumonia): Amoxicillin tablet, Azithromycin tablet
 -- -------------------------------------------------------------
+ 
 INSERT INTO medications (
     id, encounter_id, patient_id, diagnosis_id, prescribed_by_hcp_id,
     medication_name, dosage_amount, dosage_unit, form,
@@ -1043,13 +1079,13 @@ INSERT INTO medications (
     '00000000-0000-0000-0000-000000000040',
     '00000000-0000-0000-0000-000000000020',
     '00000000-0000-0000-0000-000000000010',
-    '00000000-0000-0000-0000-000000000033',  -- linked to Asthma
+    '00000000-0000-0000-0000-000000000034',  -- Asthma
     '00000000-0000-0000-0000-000000000011',
     'Salbutamol',
     100, 'MCG', 'INHALER',
-    '2 puffs as needed, maximum 4 times daily',
+    '2 puffs as needed, up to 4 times daily',
     '2025-11-10', NULL,
-    'Shake well before use. Rinse mouth after each use to prevent oral thrush.',
+    'Shake well before use. Use only when experiencing breathlessness or chest tightness. Rinse mouth after use.',
     '2025-11-10 09:30:00+00',
     now(), now()
 );
@@ -1063,20 +1099,60 @@ INSERT INTO medications (
     '00000000-0000-0000-0000-000000000041',
     '00000000-0000-0000-0000-000000000020',
     '00000000-0000-0000-0000-000000000010',
-    '00000000-0000-0000-0000-000000000034',  -- linked to Diabetes
+    '00000000-0000-0000-0000-000000000034',  -- Asthma
     '00000000-0000-0000-0000-000000000011',
-    'Metformin',
-    500, 'MG', 'TABLET',
-    'Twice daily with meals',
+    'Fluticasone Propionate',
+    250, 'MCG', 'INHALER',
+    'Once daily, every morning',
     '2025-11-10', NULL,
-    'Take with food to reduce gastrointestinal side effects. Monitor blood glucose regularly.',
+    'This is a preventer inhaler, use every day even when feeling well. Rinse mouth thoroughly after each use to prevent oral thrush.',
     '2025-11-10 09:30:00+00',
+    now(), now()
+);
+ 
+INSERT INTO medications (
+    id, encounter_id, patient_id, diagnosis_id, prescribed_by_hcp_id,
+    medication_name, dosage_amount, dosage_unit, form,
+    frequency, start_date, end_date, instructions,
+    prescribed_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000042',
+    '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000035',  -- Pneumonia
+    '00000000-0000-0000-0000-000000000011',
+    'Amoxicillin',
+    500, 'MG', 'CAPSULE',
+    'Three times daily',
+    '2026-03-20', '2026-03-27',
+    'Complete the full 7-day course even if you feel better. Take at evenly spaced intervals. Can be taken with or without food.',
+    '2026-03-20 09:30:00+00',
+    now(), now()
+);
+ 
+INSERT INTO medications (
+    id, encounter_id, patient_id, diagnosis_id, prescribed_by_hcp_id,
+    medication_name, dosage_amount, dosage_unit, form,
+    frequency, start_date, end_date, instructions,
+    prescribed_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000043',
+    '00000000-0000-0000-0000-000000000021',
+    '00000000-0000-0000-0000-000000000010',
+    '00000000-0000-0000-0000-000000000035',  -- Pneumonia
+    '00000000-0000-0000-0000-000000000011',
+    'Azithromycin',
+    500, 'MG', 'TABLET',
+    'Once daily',
+    '2026-03-20', '2026-03-24',
+    'Complete the full 5-day course. Take on an empty stomach for best absorption. Avoid antacids within 2 hours of taking this medication.',
+    '2026-03-20 09:30:00+00',
     now(), now()
 );
  
 -- -------------------------------------------------------------
 -- 5. Allergies
---    - Penicillin (Severe)
+--    - Penicillin (Severe)   — NOTE: this is why Azithromycin was chosen
 --    - Shellfish (Moderate)
 -- -------------------------------------------------------------
 INSERT INTO patient_allergies (
@@ -1143,10 +1219,11 @@ INSERT INTO patient_emergency_contacts (
     FALSE,
     now(), now()
 );
-
+ 
 -- -------------------------------------------------------------
--- 7. Medical Order
---    - Seeded so MEDICAL_ORDER reminders have a real source
+-- 7. Medical Orders
+--    - Encounter 1: Lab order (CBC)
+--    - Encounter 2: Imaging order (Chest X-Ray)
 -- -------------------------------------------------------------
 INSERT INTO medical_orders (
     id, encounter_id, patient_id, ordered_by_hcp_id,
@@ -1160,23 +1237,23 @@ INSERT INTO medical_orders (
     '00000000-0000-0000-0000-000000000011',
     'LABORATORY',
     'PENDING',
-    '2026-06-10 10:00:00+00',
+    '2025-11-10 10:00:00+00',
     NULL,
     now(), now()
 );
-
+ 
 INSERT INTO lab_orders (
     medical_order_id, test_type_id, specimen_type_id,
     fasting_required, priority, clinical_indication
 ) VALUES (
     '00000000-0000-0000-0000-000000000070',
-    10,
-    1,
-    TRUE,
+    9,   -- BLOOD_GLUCOSE
+    1,   -- BLOOD
+    FALSE,
     'ROUTINE',
-    'Monitor HbA1c after the initial diabetes diagnosis and metformin start.'
+    'Baseline CBC to check eosinophil count and rule out infection as a contributor to asthma symptoms.'
 );
-
+ 
 INSERT INTO medical_orders (
     id, encounter_id, patient_id, ordered_by_hcp_id,
     order_type, order_status,
@@ -1184,49 +1261,54 @@ INSERT INTO medical_orders (
     created_at, updated_at
 ) VALUES (
     '00000000-0000-0000-0000-000000000071',
-    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000021',
     '00000000-0000-0000-0000-000000000010',
     '00000000-0000-0000-0000-000000000011',
     'IMAGING',
     'PENDING',
-    '2026-06-11 14:00:00+00',
+    '2026-03-20 10:00:00+00',
     NULL,
     now(), now()
 );
-
+ 
 INSERT INTO imaging_orders (
     medical_order_id, imaging_type_id, body_part_id,
     contrast_used, priority, clinical_indication
 ) VALUES (
     '00000000-0000-0000-0000-000000000071',
-    3,
-    3,
+    1,   -- X-RAY
+    3,   -- CHEST
     FALSE,
     'ROUTINE',
-    'Evaluate new-onset headaches with associated visual disturbances.'
+    'Confirm diagnosis of community-acquired pneumonia and assess extent of consolidation in the right lower lobe.'
 );
-
+ 
 -- -------------------------------------------------------------
 -- 8. Reminders
---    - One for each reminder type
+--    - MEDICATION reminders only, one per medication
+--    - Salbutamol & Fluticasone: is_active = TRUE  (ongoing, no end date)
+--    - Amoxicillin & Azithromycin: is_active = FALSE (courses completed)
 -- -------------------------------------------------------------
 INSERT INTO reminders (
     id, patient_id, reminder_type,
-    encounter_id, starts_at, appointment_at,
+    medication_id, starts_at, ends_at,
+    reminder_time, custom_days,
     is_active, dismissed_at,
     created_at, updated_at
 ) VALUES (
     '00000000-0000-0000-0000-000000000080',
     '00000000-0000-0000-0000-000000000010',
-    'APPOINTMENT',
-    '00000000-0000-0000-0000-000000000020',
-    '2026-06-15',
-    '2026-06-15 09:00:00+00',
+    'MEDICATION',
+    '00000000-0000-0000-0000-000000000040',  -- Salbutamol
+    '2025-11-10',
+    NULL,
+    '09:00:00',
+    NULL,
     TRUE,
     NULL,
     now(), now()
 );
-
+ 
 INSERT INTO reminders (
     id, patient_id, reminder_type,
     medication_id, starts_at, ends_at,
@@ -1237,7 +1319,68 @@ INSERT INTO reminders (
     '00000000-0000-0000-0000-000000000081',
     '00000000-0000-0000-0000-000000000010',
     'MEDICATION',
-    '00000000-0000-0000-0000-000000000040',
+    '00000000-0000-0000-0000-000000000041',  -- Fluticasone
+    '2025-11-10',
+    NULL,
+    '08:00:00',
+    NULL,
+    TRUE,
+    NULL,
+    now(), now()
+);
+ 
+INSERT INTO reminders (
+    id, patient_id, reminder_type,
+    medication_id, starts_at, ends_at,
+    reminder_time, custom_days,
+    is_active, dismissed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000082',
+    '00000000-0000-0000-0000-000000000010',
+    'MEDICATION',
+    '00000000-0000-0000-0000-000000000042',  -- Amoxicillin (completed)
+    '2026-03-20',
+    '2026-03-27',
+    '08:00:00',
+    NULL,
+    FALSE,
+    NULL,
+    now(), now()
+);
+ 
+INSERT INTO reminders (
+    id, patient_id, reminder_type,
+    medication_id, starts_at, ends_at,
+    reminder_time, custom_days,
+    is_active, dismissed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000083',
+    '00000000-0000-0000-0000-000000000010',
+    'MEDICATION',
+    '00000000-0000-0000-0000-000000000043',  -- Azithromycin (completed)
+    '2026-03-20',
+    '2026-03-24',
+    '13:00:00',
+    NULL,
+    FALSE,
+    NULL,
+    now(), now()
+);
+
+-- Medical order reminders (lab & imaging)
+INSERT INTO reminders (
+    id, patient_id, reminder_type,
+    medical_order_id, starts_at, ends_at,
+    reminder_time, custom_days,
+    is_active, dismissed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000084',
+    '00000000-0000-0000-0000-000000000010',
+    'MEDICAL_ORDER',
+    '00000000-0000-0000-0000-000000000070',  -- CBC lab order (encounter 1)
     '2025-11-10',
     NULL,
     '09:00:00',
@@ -1249,16 +1392,37 @@ INSERT INTO reminders (
 
 INSERT INTO reminders (
     id, patient_id, reminder_type,
-    medical_order_id, starts_at,
+    medical_order_id, starts_at, ends_at,
     reminder_time, custom_days,
     is_active, dismissed_at,
     created_at, updated_at
 ) VALUES (
-    '00000000-0000-0000-0000-000000000082',
+    '00000000-0000-0000-0000-000000000085',
     '00000000-0000-0000-0000-000000000010',
     'MEDICAL_ORDER',
-    '00000000-0000-0000-0000-000000000070',
-    '2026-06-10',
+    '00000000-0000-0000-0000-000000000071',  -- Chest X-Ray imaging order (encounter 2)
+    '2026-03-20',
+    NULL,
+    '09:00:00',
+    NULL,
+    TRUE,
+    NULL,
+    now(), now()
+);
+
+-- Next appointment reminder (from encounter 1)
+INSERT INTO reminders (
+    id, patient_id, reminder_type,
+    encounter_id, appointment_at,
+    reminder_time, custom_days,
+    is_active, dismissed_at,
+    created_at, updated_at
+) VALUES (
+    '00000000-0000-0000-0000-000000000086',
+    '00000000-0000-0000-0000-000000000010',
+    'APPOINTMENT',
+    '00000000-0000-0000-0000-000000000020',  -- Encounter 1 (scheduled next appointment)
+    '2026-03-20 09:00:00+00',
     '09:00:00',
     NULL,
     TRUE,
@@ -1268,7 +1432,8 @@ INSERT INTO reminders (
 
 -- -------------------------------------------------------------
 -- 9. Notifications
---    - Covers SYSTEM and REMINDER notification types
+--    - All SENT + READ, no PENDING
+--    - 2 system notifications per encounter (access + new encounter)
 -- -------------------------------------------------------------
 INSERT INTO notifications (
     id, user_id, notification_type, status,
@@ -1279,16 +1444,16 @@ INSERT INTO notifications (
     '00000000-0000-0000-0000-000000000090',
     '00000000-0000-0000-0000-000000000002',
     'SYSTEM',
-    'SENT',
+    'READ',
     'Account Access',
-    'Dr. Khaled Mohamed Mostafa accessed your account with read only access',
+    'Dr. Khaled Mohamed Mostafa accessed your medical record.',
     NULL,
-    '2026-06-09 10:00:00+00',
-    '2026-06-09 10:00:00+00',
-    NULL,
+    '2025-11-10 09:00:00+00',
+    '2025-11-10 09:00:00+00',
+    '2025-11-10 20:00:00+00',
     now()
 );
-
+ 
 INSERT INTO notifications (
     id, user_id, notification_type, status,
     title, message, reminder_id,
@@ -1298,92 +1463,16 @@ INSERT INTO notifications (
     '00000000-0000-0000-0000-000000000091',
     '00000000-0000-0000-0000-000000000002',
     'SYSTEM',
-    'SENT',
+    'READ',
     'New Encounter Added',
-    'Dr. Khaled Mohamed Mostafa added a new encounter to your medical history',
+    'Dr. Khaled Mohamed Mostafa added a new encounter to your medical history.',
     NULL,
-    '2026-06-09 10:05:00+00',
-    '2026-06-09 10:05:00+00',
-    NULL,
+    '2025-11-10 09:05:00+00',
+    '2025-11-10 09:05:00+00',
+    '2025-11-10 20:00:00+00',
     now()
 );
-
-INSERT INTO notifications (
-    id, user_id, notification_type, status,
-    title, message, reminder_id,
-    scheduled_for, sent_at, read_at,
-    created_at
-) VALUES (
-    '00000000-0000-0000-0000-000000000096',
-    '00000000-0000-0000-0000-000000000002',
-    'SYSTEM',
-    'PENDING',
-    'Account Access',
-    'Dr. Khaled Mohamed Mostafa accessed your account with read only access',
-    NULL,
-    '2026-06-10 08:00:00+00',
-    NULL,
-    NULL,
-    now()
-);
-
-INSERT INTO notifications (
-    id, user_id, notification_type, status,
-    title, message, reminder_id,
-    scheduled_for, sent_at, read_at,
-    created_at
-) VALUES (
-    '00000000-0000-0000-0000-000000000097',
-    '00000000-0000-0000-0000-000000000002',
-    'SYSTEM',
-    'PENDING',
-    'New Encounter Added',
-    'Dr. Khaled Mohamed Mostafa added a new encounter to your medical history',
-    NULL,
-    '2026-06-10 08:05:00+00',
-    NULL,
-    NULL,
-    now()
-);
-
-INSERT INTO notifications (
-    id, user_id, notification_type, status,
-    title, message, reminder_id,
-    scheduled_for, sent_at, read_at,
-    created_at
-) VALUES (
-    '00000000-0000-0000-0000-000000000094',
-    '00000000-0000-0000-0000-000000000002',
-    'REMINDER',
-    'PENDING',
-    'Upcoming Appointment',
-    'You have an appointment with Dr. Khaled Mohamed Mostafa tomorrow at 9:00 AM',
-    '00000000-0000-0000-0000-000000000081',
-    '2026-06-10 09:00:00+00',
-    NULL,
-    NULL,
-    now()
-);
-
-INSERT INTO notifications (
-    id, user_id, notification_type, status,
-    title, message, reminder_id,
-    scheduled_for, sent_at, read_at,
-    created_at
-) VALUES (
-    '00000000-0000-0000-0000-000000000095',
-    '00000000-0000-0000-0000-000000000002',
-    'REMINDER',
-    'PENDING',
-    'Appointment Soon',
-    'Your appointment with Dr. Khaled Mohamed Mostafa is in 1 hour',
-    '00000000-0000-0000-0000-000000000080',
-    '2026-06-10 11:00:00+00',
-    NULL,
-    NULL,
-    now()
-);
-
+ 
 INSERT INTO notifications (
     id, user_id, notification_type, status,
     title, message, reminder_id,
@@ -1392,17 +1481,17 @@ INSERT INTO notifications (
 ) VALUES (
     '00000000-0000-0000-0000-000000000092',
     '00000000-0000-0000-0000-000000000002',
-    'REMINDER',
-    'PENDING',
-    'Upcoming Appointment',
-    'You have an appointment with Dr. Khaled Mohamed Mostafa tomorrow at 9:00 AM',
-    '00000000-0000-0000-0000-000000000080',
-    '2026-06-14 09:00:00+00',
+    'SYSTEM',
+    'READ',
+    'Account Access',
+    'Dr. Khaled Mohamed Mostafa accessed your medical record.',
     NULL,
-    NULL,
+    '2026-03-20 09:00:00+00',
+    '2026-03-20 09:00:00+00',
+    '2026-03-20 20:00:00+00',
     now()
 );
-
+ 
 INSERT INTO notifications (
     id, user_id, notification_type, status,
     title, message, reminder_id,
@@ -1411,13 +1500,13 @@ INSERT INTO notifications (
 ) VALUES (
     '00000000-0000-0000-0000-000000000093',
     '00000000-0000-0000-0000-000000000002',
-    'REMINDER',
-    'PENDING',
-    'Appointment Soon',
-    'Your appointment with Dr. Khaled Mohamed Mostafa is in 1 hour',
-    '00000000-0000-0000-0000-000000000080',
-    '2026-06-15 08:00:00+00',
+    'SYSTEM',
+    'READ',
+    'New Encounter Added',
+    'Dr. Khaled Mohamed Mostafa added a new encounter to your medical history.',
     NULL,
-    NULL,
+    '2026-03-20 09:05:00+00',
+    '2026-03-20 09:05:00+00',
+    '2026-03-20 20:00:00+00',
     now()
 );
